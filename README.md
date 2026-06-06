@@ -17,16 +17,17 @@ Engineer story this project demonstrates.
 
 ## Status
 
-Phase 1 — foundation only. The project structure, tooling (Poetry, Ruff,
-Pytest, MyPy, pre-commit), Docker, and CI are in place. Functional modules
-land in subsequent phases.
+Phase 2 complete — Clarion now boots from a customer YAML. Two demonstration
+customers are shipped (ophthalmology and orthopedics); agent code (lands in
+Phase 5) reads `CustomerConfig` and behaves accordingly with no per-customer
+branching.
 
 ## Build phases
 
 | Phase | Scope | Status |
 | ----- | ----- | ------ |
-| 1     | Foundation (Poetry, Ruff, Pytest, Docker, CI) | in progress |
-| 2     | Multi-tenant config system                    | pending |
+| 1     | Foundation (Poetry, Ruff, Pytest, Docker, CI) | ✅ complete |
+| 2     | Multi-tenant config system                    | ✅ complete |
 | 3     | Dual data pipeline (RAG + SQLite)             | pending |
 | 4     | Schemas + mocked tools                        | pending |
 | 5     | Text agent MVP (ReAct)                        | pending |
@@ -61,6 +62,31 @@ poetry run ruff format --check .
 poetry run mypy
 poetry run pytest
 ```
+
+## Boot from a customer config
+
+Every deployment selects exactly one customer via the `CLARION_CUSTOMER`
+environment variable. The selector matches a YAML stem in `configs/`.
+
+```bash
+# Default — ophthalmology
+poetry run python -c "from clarion.config import load_customer; print(load_customer())"
+
+# Switch to a different customer with no code change
+CLARION_CUSTOMER=orthopedics poetry run python -c \
+  "from clarion.config import load_customer; c=load_customer(); print(c.display_name, c.enabled_tools)"
+```
+
+Adding a third customer is one file: drop `configs/<name>.yaml`, set
+`CLARION_CUSTOMER=<name>`. No agent-code change. That's the FDE story this
+project demonstrates.
+
+The shipped configs:
+
+| Customer | Tools enabled | Languages | Notable divergence |
+| -------- | ------------- | --------- | ------------------ |
+| `ophthalmology` | all 5 | en, es | full tool surface |
+| `orthopedics`   | 4 (no `cancel_appointment`) | en | cancellations always route to a human; stricter escalation thresholds |
 
 ## Repository layout
 
