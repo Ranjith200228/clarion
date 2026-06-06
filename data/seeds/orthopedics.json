@@ -1,0 +1,43 @@
+{
+  "providers": [
+    {
+      "provider_id": "prov_ortho_garcia",
+      "full_name": "Dr. Luis Garcia",
+      "specialties": ["New Patient Joint Consult", "Sports Medicine Consult"],
+      "location": "Summit Downtown",
+      "accepts_new_patients": true
+    },
+    {
+      "provider_id": "prov_ortho_oconnor",
+      "full_name": "Dr. Maeve O'Connor",
+      "specialties": ["Post-Op Follow-Up", "Imaging Review (X-ray / MRI)"],
+      "location": "Summit Downtown",
+      "accepts_new_patients": false
+    },
+    {
+      "provider_id": "prov_ortho_singh",
+      "full_name": "Dr. Raj Singh",
+      "specialties": ["Physical Therapy Referral", "Sports Medicine Consult"],
+      "location": "Summit Eastside",
+      "accepts_new_patients": true
+    }
+  ],
+  "availability": [
+    {"slot_id": "slot_ortho_001", "provider_id": "prov_ortho_garcia",  "appointment_type": "New Patient Joint Consult",   "slot_date": "2026-06-15", "start_time": "09:00:00", "duration_minutes": 45},
+    {"slot_id": "slot_ortho_002", "provider_id": "prov_ortho_garcia",  "appointment_type": "New Patient Joint Consult",   "slot_date": "2026-06-15", "start_time": "11:00:00", "duration_minutes": 45},
+    {"slot_id": "slot_ortho_003", "provider_id": "prov_ortho_garcia",  "appointment_type": "Sports Medicine Consult",     "slot_date": "2026-06-16", "start_time": "14:00:00", "duration_minutes": 30},
+    {"slot_id": "slot_ortho_004", "provider_id": "prov_ortho_oconnor", "appointment_type": "Post-Op Follow-Up",           "slot_date": "2026-06-16", "start_time": "08:30:00", "duration_minutes": 20},
+    {"slot_id": "slot_ortho_005", "provider_id": "prov_ortho_oconnor", "appointment_type": "Post-Op Follow-Up",           "slot_date": "2026-06-17", "start_time": "08:30:00", "duration_minutes": 20},
+    {"slot_id": "slot_ortho_006", "provider_id": "prov_ortho_oconnor", "appointment_type": "Imaging Review (X-ray / MRI)","slot_date": "2026-06-17", "start_time": "10:00:00", "duration_minutes": 30},
+    {"slot_id": "slot_ortho_007", "provider_id": "prov_ortho_singh",   "appointment_type": "Physical Therapy Referral",   "slot_date": "2026-06-18", "start_time": "13:00:00", "duration_minutes": 30},
+    {"slot_id": "slot_ortho_008", "provider_id": "prov_ortho_singh",   "appointment_type": "Sports Medicine Consult",     "slot_date": "2026-06-18", "start_time": "14:00:00", "duration_minutes": 30},
+    {"slot_id": "slot_ortho_009", "provider_id": "prov_ortho_singh",   "appointment_type": "Physical Therapy Referral",   "slot_date": "2026-06-19", "start_time": "13:00:00", "duration_minutes": 30},
+    {"slot_id": "slot_ortho_010", "provider_id": "prov_ortho_garcia",  "appointment_type": "New Patient Joint Consult",   "slot_date": "2026-06-22", "start_time": "09:00:00", "duration_minutes": 45}
+  ],
+  "eligibility": [
+    {"patient_id": "pat_101", "payer": "Aetna",      "member_id": "AET-4421", "status": "active",  "plan_name": "Aetna PPO",        "effective_date": "2026-01-01"},
+    {"patient_id": "pat_102", "payer": "Cigna",      "member_id": "CIG-5512", "status": "active",  "plan_name": "Cigna Open Access", "effective_date": "2025-04-01"},
+    {"patient_id": "pat_103", "payer": "Workers Comp","member_id": "WC-9981",  "status": "pending", "plan_name": "Workers Comp Claim", "effective_date": "2026-05-20"},
+    {"patient_id": "pat_104", "payer": "United",     "member_id": "UHC-2210", "status": "active",  "plan_name": "United Choice Plus","effective_date": "2025-09-01"}
+  ]
+}
