@@ -12,6 +12,11 @@ python = ">=3.11,<3.13"
 pydantic = "^2.7"
 pydantic-settings = "^2.3"
 pyyaml = "^6.0"
+# Phase 3 — dual data pipeline (structured + unstructured/RAG)
+numpy = "^1.26"
+scikit-learn = "^1.5"   # TF-IDF fallback embedder (no API key required)
+faiss-cpu = "^1.8"      # vector index for dense embeddings
+openai = "^1.40"        # optional embedder (text-embedding-3-small)
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.6"
