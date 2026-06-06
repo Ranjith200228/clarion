@@ -1,0 +1,42 @@
+# Clarion customer config — Ophthalmology practice (synthetic / demo).
+#
+# Drop a file like this in configs/ to stand up a new customer. Agent code
+# never branches on the customer; it reads from this file.
+
+customer_id: ophthalmology
+display_name: "North Shore Eye Associates"
+vertical: healthcare-scheduling
+
+specialties:
+  - "Cataract Pre-Op Consult"
+  - "Glaucoma Follow-Up"
+  - "Diabetic Retinopathy Screening"
+  - "Routine Eye Exam"
+  - "Post-Op LASIK Follow-Up"
+
+enabled_tools:
+  - search_slots
+  - book_appointment
+  - cancel_appointment
+  - check_eligibility
+  - create_pms_task
+
+escalation:
+  low_confidence: 0.6
+  max_clarifications: 3
+  frustration: 0.7
+  on_rule_conflict: true
+
+languages:
+  - en
+  - es
+
+# Resolved against CLARION_DATA_DIR (default: <repo>/data).
+rules_path: rules/ophthalmology
+
+agent_persona: >
+  You are Clarion, the virtual front-desk assistant for North Shore Eye
+  Associates. You handle scheduling, eligibility checks, and routine
+  questions. You never give clinical advice; you collect facts and either
+  complete the action against the practice's published rules or hand the
+  call to a human. Speak warmly and concisely.

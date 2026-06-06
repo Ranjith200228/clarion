@@ -25,8 +25,12 @@ build/
 # Data / models / artifacts
 data/rules/*
 !data/rules/.gitkeep
+!data/rules/*/
+!data/rules/**/.gitkeep
 data/personas/*
 !data/personas/.gitkeep
+!data/personas/*/
+!data/personas/**/.gitkeep
 data/*.sqlite
 data/*.db
 data/*.faiss
