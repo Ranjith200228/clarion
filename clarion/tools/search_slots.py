@@ -35,5 +35,3 @@ class SearchSlotsTool:
         except Exception as e:
             return SearchSlotsOutput(ok=False, error=f"search_slots failed: {e}", slots=[])
         return SearchSlotsOutput(ok=True, slots=slots)
-
-

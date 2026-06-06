@@ -66,13 +66,16 @@ class ToolError(RuntimeError):
 class Tool(Protocol, Generic[InputT_contra, OutputT_co]):
     """Protocol every tool implements.
 
-    Subclasses also set ``name``, ``input_model``, ``output_model`` as
-    class-level attributes so the registry can introspect them.
+    Subclasses also set ``input_model`` and ``output_model`` as class-level
+    attributes; the agent / API layers introspect them at runtime to
+    generate the LLM's function-calling schema. They're intentionally not
+    part of the Protocol contract — declaring them as
+    ``ClassVar[type[BaseModel]]`` would conflict with the narrower
+    ``ClassVar[type[ConcreteInput]]`` subclasses use, because ClassVar is
+    invariant under Protocol checks.
     """
 
     name: ClassVar[str]
-    input_model: ClassVar[type[BaseModel]]
-    output_model: ClassVar[type[ToolOutput]]
 
     def run(self, input: InputT_contra, ctx: ToolContext) -> OutputT_co: ...
 
