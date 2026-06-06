@@ -1,0 +1,43 @@
+# Clarion customer config — Orthopedics practice (synthetic / demo).
+#
+# This is the "stood up in an afternoon" exhibit: the only thing that changes
+# from ophthalmology is this YAML and the rules corpus. Agent code is
+# identical.
+
+customer_id: orthopedics
+display_name: "Summit Orthopedic Partners"
+vertical: healthcare-scheduling
+
+specialties:
+  - "New Patient Joint Consult"
+  - "Post-Op Follow-Up"
+  - "Sports Medicine Consult"
+  - "Physical Therapy Referral"
+  - "Imaging Review (X-ray / MRI)"
+
+# This practice doesn't want the agent cancelling appointments — cancellations
+# are routed to a human. Demonstrates per-customer tool subsetting.
+enabled_tools:
+  - search_slots
+  - book_appointment
+  - check_eligibility
+  - create_pms_task
+
+escalation:
+  low_confidence: 0.65
+  max_clarifications: 4
+  frustration: 0.75
+  on_rule_conflict: true
+
+languages:
+  - en
+
+rules_path: rules/orthopedics
+
+agent_persona: >
+  You are Clarion, the virtual front-desk assistant for Summit Orthopedic
+  Partners. You handle scheduling, eligibility checks, and routine
+  questions. Cancellations always go to a human — politely take a callback
+  number and file a task. You never give clinical advice; you collect
+  facts and either complete the action against the practice's published
+  rules or hand the call to a human.
