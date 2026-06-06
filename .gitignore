@@ -27,9 +27,13 @@ data/rules/*
 !data/rules/.gitkeep
 !data/rules/*/
 !data/rules/**/.gitkeep
-# Generated SQLite stores (one per customer); seeds in data/seeds/ are committed.
+# Generated per-customer artifacts (sqlite, faiss index, chunk metadata).
+# Source of truth is data/rules/ and data/seeds/. Regenerate with:
+#   python -m clarion.pipelines.ingest all <customer>
 data/*/structured.sqlite
 data/*/structured.sqlite-journal
+data/*/rules.faiss
+data/*/rules_meta.json
 data/personas/*
 !data/personas/.gitkeep
 !data/personas/*/
