@@ -53,7 +53,10 @@ def orthopedics_retriever(tmp_path: Path) -> Retriever:
     "query, expected_source",
     [
         ("how long is a cataract pre-op consult?", "01_appointment_types.md"),
-        ("do I need to bring sunglasses and arrange transportation home?", "03_dilation_and_prep.md"),
+        (
+            "do I need to bring sunglasses and arrange transportation home?",
+            "03_dilation_and_prep.md",
+        ),
         ("do you accept kaiser insurance?", "04_insurance_and_payers.md"),
         ("what is the cancellation policy?", "05_cancellation_and_reschedule.md"),
         ("the patient suddenly lost vision in one eye", "06_emergencies_and_escalation.md"),

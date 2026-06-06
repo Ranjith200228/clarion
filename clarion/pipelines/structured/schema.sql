@@ -51,3 +51,16 @@ CREATE TABLE IF NOT EXISTS eligibility (
     effective_date   TEXT,                        -- ISO YYYY-MM-DD
     termination_date TEXT                         -- ISO YYYY-MM-DD
 );
+
+CREATE TABLE IF NOT EXISTS pms_tasks (
+    task_id     TEXT PRIMARY KEY,
+    subject     TEXT NOT NULL,
+    body        TEXT NOT NULL,
+    patient_id  TEXT,                             -- nullable: not every task is patient-bound
+    priority    TEXT NOT NULL DEFAULT 'normal',   -- 'normal' | 'urgent'
+    status      TEXT NOT NULL DEFAULT 'open',     -- 'open' | 'closed'
+    created_at  TEXT NOT NULL                     -- ISO datetime
+);
+
+CREATE INDEX IF NOT EXISTS idx_pms_tasks_open
+    ON pms_tasks (status, priority, created_at);

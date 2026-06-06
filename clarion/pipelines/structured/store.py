@@ -25,8 +25,11 @@ from clarion.schemas import (
     Appointment,
     AvailabilitySlot,
     EligibilityRecord,
+    PmsTask,
     Provider,
 )
+from clarion.schemas.tasks import TaskStatus
+from clarion.schemas.tools import TaskPriority
 
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
@@ -267,6 +270,54 @@ class StructuredStore:
             ).fetchone()
         return _row_to_eligibility(row) if row else None
 
+    # ---------- pms tasks ----------
+
+    def create_task(
+        self,
+        subject: str,
+        body: str,
+        *,
+        patient_id: str | None = None,
+        priority: TaskPriority = "normal",
+    ) -> PmsTask:
+        """Append a PMS task. ID is generated; created_at is set to now."""
+        task_id = f"task_{uuid.uuid4().hex[:12]}"
+        created_at = datetime.now()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO pms_tasks
+                    (task_id, subject, body, patient_id, priority, status, created_at)
+                VALUES (?, ?, ?, ?, ?, 'open', ?)
+                """,
+                (task_id, subject, body, patient_id, priority, created_at.isoformat()),
+            )
+        return PmsTask(
+            task_id=task_id,
+            subject=subject,
+            body=body,
+            patient_id=patient_id,
+            priority=priority,
+            status="open",
+            created_at=created_at,
+        )
+
+    def get_task(self, task_id: str) -> PmsTask | None:
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM pms_tasks WHERE task_id = ?", (task_id,)).fetchone()
+        return _row_to_task(row) if row else None
+
+    def list_open_tasks(self, *, priority: TaskPriority | None = None) -> list[PmsTask]:
+        sql = "SELECT * FROM pms_tasks WHERE status = 'open'"
+        params: list[object] = []
+        if priority is not None:
+            sql += " AND priority = ?"
+            params.append(priority)
+        sql += " ORDER BY created_at"
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [_row_to_task(r) for r in rows]
+
 
 # ---------- row → model adapters ----------
 
@@ -318,4 +369,21 @@ def _row_to_eligibility(r: sqlite3.Row) -> EligibilityRecord:
         termination_date=(
             date.fromisoformat(r["termination_date"]) if r["termination_date"] else None
         ),
+    )
+
+
+def _row_to_task(r: sqlite3.Row) -> PmsTask:
+    # SQLite stores priority/status as plain text — we trust the schema's
+    # CHECK constraints (and the upsert path) to keep them in-bounds. Cast
+    # via the Pydantic model so it surfaces any drift loudly.
+    status: TaskStatus = r["status"]
+    priority: TaskPriority = r["priority"]
+    return PmsTask(
+        task_id=r["task_id"],
+        subject=r["subject"],
+        body=r["body"],
+        patient_id=r["patient_id"],
+        priority=priority,
+        status=status,
+        created_at=datetime.fromisoformat(r["created_at"]),
     )

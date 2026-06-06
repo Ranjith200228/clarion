@@ -8,6 +8,7 @@ from clarion.schemas.domain import (
     EligibilityStatus,
     Provider,
 )
+from clarion.schemas.tasks import PmsTask, TaskStatus
 from clarion.schemas.tools import (
     BookAppointmentInput,
     BookAppointmentOutput,
@@ -37,9 +38,11 @@ __all__ = [
     "CreatePmsTaskOutput",
     "EligibilityRecord",
     "EligibilityStatus",
+    "PmsTask",
     "Provider",
     "SearchSlotsInput",
     "SearchSlotsOutput",
     "TaskPriority",
+    "TaskStatus",
     "ToolOutput",
 ]

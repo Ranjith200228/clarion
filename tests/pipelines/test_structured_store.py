@@ -233,3 +233,44 @@ def test_two_customers_dont_share_state(tmp_path: Path) -> None:
     a.upsert_provider(_make_provider("only_in_alpha"))
     assert [p.provider_id for p in a.list_providers()] == ["only_in_alpha"]
     assert b.list_providers() == []
+
+
+# ---------- pms tasks ----------
+
+
+def test_create_task_round_trips(store: StructuredStore) -> None:
+    task = store.create_task(
+        subject="Verify payer",
+        body="Aetna eligibility unclear — call patient back.",
+        patient_id="pat_demo",
+        priority="normal",
+    )
+    assert task.task_id.startswith("task_")
+    assert task.status == "open"
+    again = store.get_task(task.task_id)
+    assert again is not None
+    assert again == task
+
+
+def test_create_task_without_patient_id(store: StructuredStore) -> None:
+    task = store.create_task(subject="General", body="Front-desk follow-up.")
+    assert task.patient_id is None
+    assert store.get_task(task.task_id) == task
+
+
+def test_list_open_tasks_orders_by_created_at(store: StructuredStore) -> None:
+    a = store.create_task(subject="A", body="first")
+    b = store.create_task(subject="B", body="second", priority="urgent")
+    open_tasks = store.list_open_tasks()
+    assert [t.task_id for t in open_tasks] == [a.task_id, b.task_id]
+
+
+def test_list_open_tasks_filters_by_priority(store: StructuredStore) -> None:
+    store.create_task(subject="N", body="x", priority="normal")
+    u = store.create_task(subject="U", body="y", priority="urgent")
+    urgent = store.list_open_tasks(priority="urgent")
+    assert [t.task_id for t in urgent] == [u.task_id]
+
+
+def test_get_unknown_task_returns_none(store: StructuredStore) -> None:
+    assert store.get_task("ghost") is None
