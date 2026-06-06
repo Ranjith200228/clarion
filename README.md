@@ -17,11 +17,12 @@ Engineer story this project demonstrates.
 
 ## Status
 
-Phase 3 complete — Clarion has a working dual data pipeline. Markdown rules
-are chunked, embedded with TF-IDF (OpenAI embeddings opt-in when the key is
-set), and indexed in FAISS for retrieval; providers, slots, appointments,
-and eligibility live in a per-customer SQLite store. Both pipelines are
-verified to return the right answer per customer on real synthetic corpora.
+Phase 4 complete — five validated tools (`search_slots`, `book_appointment`,
+`cancel_appointment`, `check_eligibility`, `create_pms_task`) sit on top of
+the dual data pipeline behind a registry that enforces per-customer
+`enabled_tools` (e.g. orthopedics can't call `cancel_appointment` because
+its YAML says so). Tools never raise to the agent — they return structured
+`ok=False` results so the LLM can recover without exception handling.
 
 ## Build phases
 
@@ -30,7 +31,7 @@ verified to return the right answer per customer on real synthetic corpora.
 | 1     | Foundation (Poetry, Ruff, Pytest, Docker, CI) | ✅ complete |
 | 2     | Multi-tenant config system                    | ✅ complete |
 | 3     | Dual data pipeline (RAG + SQLite)             | ✅ complete |
-| 4     | Schemas + mocked tools                        | pending |
+| 4     | Schemas + mocked tools                        | ✅ complete |
 | 5     | Text agent MVP (ReAct)                        | pending |
 | 6     | Guardrails (emergency / clinical / PHI)       | pending |
 | 7     | Observability (tokens, latency, cost, traces) | pending |
@@ -175,6 +176,62 @@ clarion/
 ├── dashboard/             # Streamlit dashboard (Phase 13)
 └── tests/
 ```
+
+## Tools
+
+Every tool follows the same shape — Pydantic input, Pydantic output, never
+raises to the agent:
+
+```python
+from clarion.config import load_customer
+from clarion.pipelines.structured import StructuredStore
+from clarion.tools import ToolContext, available_tools, get_tool
+from clarion.schemas import SearchSlotsInput
+from datetime import date
+from pathlib import Path
+
+cfg = load_customer("ophthalmology")
+ctx = ToolContext(
+    customer=cfg,
+    structured=StructuredStore.for_customer(cfg.customer_id, Path("data")),
+)
+
+# Discover what the agent can call for this customer
+for tool in available_tools(cfg):
+    print(tool.name)
+
+# Use one
+tool = get_tool("search_slots", cfg)
+out = tool.run(
+    SearchSlotsInput(appointment_type="Cataract Pre-Op Consult", on_or_after=date.today()),
+    ctx,
+)
+if out.ok:
+    for slot in out.slots:
+        print(slot.slot_id, slot.slot_date, slot.start_time)
+else:
+    print("escalate:", out.error)
+```
+
+The five shipped tools:
+
+| Tool | What it does | Failure modes returned as `ok=False` |
+| ---- | ------------ | ------------------------------------ |
+| `search_slots` | List open slots filtered by type / provider / start date | DB error |
+| `book_appointment` | Atomically reserve one slot for one patient | slot unavailable (gone or double-book) |
+| `cancel_appointment` | Cancel by id, free the slot | (idempotent — unknown id returns `ok=True, cancelled=False`) |
+| `check_eligibility` | Look up the patient's payer record | (unknown patient returns `ok=True, on_file=False`) |
+| `create_pms_task` | File a follow-up task for the front desk | DB error |
+
+**Per-customer enforcement.** The registry honors each customer's
+`enabled_tools` list. `configs/orthopedics.yaml` deliberately omits
+`cancel_appointment` — when the agent calls `get_tool("cancel_appointment", cfg)`
+for orthopedics, it raises `ToolNotEnabledError` listing what *is* enabled,
+so the LLM never sees a tool the customer disabled.
+
+**Retries.** SQLite call sites are wrapped in `run_with_retry` (one retry
+on `OperationalError`, ~50 ms backoff) to absorb transient contention. The
+helper is unbounded so individual tools can apply it however they need.
 
 ## Design principles
 
