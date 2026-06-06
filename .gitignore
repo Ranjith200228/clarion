@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.ipynb_checkpoints/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Poetry
+# (commit poetry.lock once it exists; ignore wheels/sdists builds)
+dist/
+build/
+
+# Data / models / artifacts
+data/rules/*
+!data/rules/.gitkeep
+data/personas/*
+!data/personas/.gitkeep
+data/*.sqlite
+data/*.db
+data/*.faiss
+data/*.index
+
+# Evaluation outputs
+evaluation_report*.json
+traces/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets/
