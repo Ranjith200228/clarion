@@ -17,12 +17,15 @@ Engineer story this project demonstrates.
 
 ## Status
 
-Phase 4 complete — five validated tools (`search_slots`, `book_appointment`,
-`cancel_appointment`, `check_eligibility`, `create_pms_task`) sit on top of
-the dual data pipeline behind a registry that enforces per-customer
-`enabled_tools` (e.g. orthopedics can't call `cancel_appointment` because
-its YAML says so). Tools never raise to the agent — they return structured
-`ok=False` results so the LLM can recover without exception handling.
+Phase 5 complete — the agent. A ReAct loop with function calling sits on
+top of an LLM Protocol that has two implementations: `OpenAIClient`
+(production, gpt-4o-mini) and `FakeLLM` (deterministic, no API key, what
+CI uses). The system prompt is rebuilt every turn from per-customer
+persona + escalation thresholds + top-k RAG chunks against the current
+user message, so the LLM is always grounded in the practice's own rules.
+Both shipped customers (ophthalmology, orthopedics) are verified
+end-to-end: book → confirm flows and cancel-routes-to-task flows pass
+without changing a line of agent code between them.
 
 ## Build phases
 
@@ -32,7 +35,7 @@ its YAML says so). Tools never raise to the agent — they return structured
 | 2     | Multi-tenant config system                    | ✅ complete |
 | 3     | Dual data pipeline (RAG + SQLite)             | ✅ complete |
 | 4     | Schemas + mocked tools                        | ✅ complete |
-| 5     | Text agent MVP (ReAct)                        | pending |
+| 5     | Text agent MVP (ReAct)                        | ✅ complete |
 | 6     | Guardrails (emergency / clinical / PHI)       | pending |
 | 7     | Observability (tokens, latency, cost, traces) | pending |
 | 8     | FastAPI service                               | pending |
@@ -232,6 +235,79 @@ so the LLM never sees a tool the customer disabled.
 **Retries.** SQLite call sites are wrapped in `run_with_retry` (one retry
 on `OperationalError`, ~50 ms backoff) to absorb transient contention. The
 helper is unbounded so individual tools can apply it however they need.
+
+## Text agent
+
+The agent is a ReAct loop wrapped around an `LLMClient` Protocol:
+
+```python
+from pathlib import Path
+from clarion.agents import Agent, OpenAIClient  # OpenAIClient lives in clarion.agents.openai_client
+from clarion.config import load_customer
+
+cfg = load_customer("ophthalmology")
+agent = Agent.build(
+    customer=cfg,
+    llm=OpenAIClient(),  # requires OPENAI_API_KEY
+    data_dir=Path("data"),
+)
+print(agent.chat("Hi, I'd like to book a cataract pre-op consult after June 1."))
+print(agent.chat("My patient id is pat_001."))
+print(agent.chat("Yes, 9 AM works."))
+```
+
+Quick local REPL:
+
+```bash
+OPENAI_API_KEY=sk-... poetry run python -m clarion.agents.cli ophthalmology
+# or
+OPENAI_API_KEY=sk-... poetry run python -m clarion.agents.cli orthopedics
+```
+
+The ingest CLI must have been run first
+(`python -m clarion.pipelines.ingest all <customer>`) so the FAISS index
+and SQLite store exist on disk.
+
+### How a turn works
+
+1. `agent.chat(user_message)` appends the user turn to a rolling
+   transcript.
+2. The system prompt is rebuilt for this turn — persona from
+   `CustomerConfig.agent_persona`, a hardcoded operating contract
+   (no clinical advice, escalate emergencies, call tools rather than
+   guess), the customer's escalation thresholds, and top-k chunks
+   retrieved against the *current* user message (so RAG focuses on the
+   topic the patient just raised, not the whole call history).
+3. `react_loop` advertises only the customer's enabled tools, runs
+   `llm.complete(...)`, validates any tool calls against each tool's
+   Pydantic input model, dispatches them, and feeds the JSON results
+   back to the LLM as `role="tool"` messages.
+4. The loop stops when the LLM emits free text (the patient's reply) or
+   after `max_steps` (default 8) — the cap returns a polite "let me
+   have a teammate call you back" line and flags the result for the
+   Sentinel.
+
+### Capabilities
+
+| Capability | How it's covered |
+| ---------- | ---------------- |
+| Booking | `search_slots` + `book_appointment` |
+| Cancellation | `cancel_appointment` (when customer enables it) |
+| Rescheduling | Composed from `search_slots` + `book_appointment` + `create_pms_task` to cancel the old slot when the cancel tool isn't enabled |
+| Eligibility checking | `check_eligibility` (returns `on_file=False` for unknown patients without erroring) |
+| FAQ retrieval | Per-turn RAG injects top-k rule chunks into the system prompt — the LLM cites the source markdown file |
+| Function calling | Pydantic input models → JSON Schema via `clarion.agents.openai_schema.tool_to_spec` |
+| Conversation memory | `Agent.transcript: list[Message]` — every user / assistant / tool turn except the system message (rebuilt each turn) |
+
+### Tested end-to-end on both customers
+
+| Test file | Scenario |
+| --------- | -------- |
+| `tests/agents/test_e2e_ophthalmology.py` | Patient books cataract pre-op — agent runs check_eligibility → search_slots → book_appointment → create_pms_task → confirms. Slot is gone from the store; transport task is filed. |
+| `tests/agents/test_e2e_ophthalmology.py` | "Do you accept Kaiser?" — pure FAQ, zero tool calls; the LLM reads the answer from the rules block that RAG injected into the system prompt. |
+| `tests/agents/test_e2e_orthopedics.py` | Patient asks to cancel — `cancel_appointment` is disabled for this customer, the registry returns `not enabled`, the next LLM turn files a PMS task per the practice's "all cancellations go to a human" rule. |
+| `tests/agents/test_e2e_orthopedics.py` | Inspection check — the tools advertised to the LLM are exactly the four orthopedics permits (no `cancel_appointment` ever leaks into the spec list). |
+| `tests/agents/test_e2e_orthopedics.py` | Reschedule emerges from `search_slots` + `book_appointment` + `create_pms_task` to cancel the old slot — no per-tenant code path. |
 
 ## Design principles
 
