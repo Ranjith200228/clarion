@@ -1,1 +1,1 @@
-"""Structured + unstructured data ingest pipelines (lands in Phase 3)."""
+"""Dual data pipeline: structured (SQLite) + unstructured (RAG / FAISS)."""

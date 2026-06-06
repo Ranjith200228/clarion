@@ -27,6 +27,9 @@ data/rules/*
 !data/rules/.gitkeep
 !data/rules/*/
 !data/rules/**/.gitkeep
+# Generated SQLite stores (one per customer); seeds in data/seeds/ are committed.
+data/*/structured.sqlite
+data/*/structured.sqlite-journal
 data/personas/*
 !data/personas/.gitkeep
 !data/personas/*/
