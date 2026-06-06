@@ -17,10 +17,11 @@ Engineer story this project demonstrates.
 
 ## Status
 
-Phase 2 complete — Clarion now boots from a customer YAML. Two demonstration
-customers are shipped (ophthalmology and orthopedics); agent code (lands in
-Phase 5) reads `CustomerConfig` and behaves accordingly with no per-customer
-branching.
+Phase 3 complete — Clarion has a working dual data pipeline. Markdown rules
+are chunked, embedded with TF-IDF (OpenAI embeddings opt-in when the key is
+set), and indexed in FAISS for retrieval; providers, slots, appointments,
+and eligibility live in a per-customer SQLite store. Both pipelines are
+verified to return the right answer per customer on real synthetic corpora.
 
 ## Build phases
 
@@ -28,7 +29,7 @@ branching.
 | ----- | ----- | ------ |
 | 1     | Foundation (Poetry, Ruff, Pytest, Docker, CI) | ✅ complete |
 | 2     | Multi-tenant config system                    | ✅ complete |
-| 3     | Dual data pipeline (RAG + SQLite)             | pending |
+| 3     | Dual data pipeline (RAG + SQLite)             | ✅ complete |
 | 4     | Schemas + mocked tools                        | pending |
 | 5     | Text agent MVP (ReAct)                        | pending |
 | 6     | Guardrails (emergency / clinical / PHI)       | pending |
@@ -88,6 +89,56 @@ The shipped configs:
 | `ophthalmology` | all 5 | en, es | full tool surface |
 | `orthopedics`   | 4 (no `cancel_appointment`) | en | cancellations always route to a human; stricter escalation thresholds |
 
+## Dual data pipeline
+
+Each customer has two data stores, both populated by one CLI:
+
+```bash
+# Build both pipelines for one customer (runs structured + unstructured)
+poetry run python -m clarion.pipelines.ingest all ophthalmology
+poetry run python -m clarion.pipelines.ingest all orthopedics
+
+# Or just one half
+poetry run python -m clarion.pipelines.ingest structured   ophthalmology
+poetry run python -m clarion.pipelines.ingest unstructured orthopedics
+```
+
+**Structured pipeline (`clarion.pipelines.structured`)** — SQLite, one file
+per customer at `data/<customer_id>/structured.sqlite`. Tables: `providers`,
+`availability`, `appointments`, `eligibility`. The agent's tools (Phase 4)
+call into `StructuredStore` and never see raw SQL. Seed data lives in
+`data/seeds/<customer_id>.json`.
+
+**Unstructured pipeline (`clarion.pipelines.unstructured` + `clarion.rag`)** —
+markdown rules in `data/rules/<customer_id>/*.md` are chunked on H2/H3
+boundaries (preserving heading trail as metadata), embedded with TF-IDF by
+default (1-2 ngrams, sublinear TF, L2-normalized dense float32), and indexed
+with `faiss.IndexFlatIP` so inner product equals cosine similarity. Setting
+`OPENAI_API_KEY` swaps the default embedder to `text-embedding-3-small`
+without any code change.
+
+```python
+from clarion.config import load_customer
+from clarion.rag import load_customer_retriever
+from pathlib import Path
+
+cfg = load_customer("ophthalmology")
+retriever = load_customer_retriever(cfg, data_dir=Path("data"))
+for hit in retriever.retrieve("how long is a cataract consult?", k=3):
+    print(round(hit.score, 3), hit.chunk.heading, "—", hit.chunk.source)
+```
+
+Acceptance verified by `tests/rag/test_retriever.py` and
+`tests/pipelines/test_structured_store.py`:
+
+- **RAG retrieves correct rules** — 10 parametrized queries (5 per customer)
+  assert the right file appears in top-3, plus cross-customer isolation
+  checks (workers-comp content never surfaces in ophthalmology; dilation
+  content never surfaces in orthopedics).
+- **Structured queries return valid records** — 16 tests over upsert,
+  search, atomic booking with double-book protection, cancellation
+  idempotence, and per-customer SQLite isolation.
+
 ## Repository layout
 
 ```
@@ -102,8 +153,10 @@ clarion/
 ├── docs/                  # discovery doc, architecture diagram
 ├── configs/               # per-customer YAML (ophthalmology, orthopedics)
 ├── data/
-│   ├── rules/             # unstructured rules corpora (gitignored)
-│   └── personas/          # synthetic patient personas (gitignored)
+│   ├── rules/             # unstructured rules corpora (markdown, per-customer)
+│   ├── seeds/             # structured-pipeline seeds (JSON, per-customer)
+│   ├── personas/          # synthetic patient personas (Phase 9)
+│   └── <customer_id>/     # generated: structured.sqlite + rules.faiss (gitignored)
 │
 ├── clarion/               # importable package
 │   ├── config/            # Pydantic Settings, customer loader
