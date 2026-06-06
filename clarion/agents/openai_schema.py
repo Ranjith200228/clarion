@@ -42,9 +42,7 @@ def tool_to_spec(tool: Tool[Any, Any]) -> ToolSpec:
     # commit 9 for why it's not on the Protocol contract).
     input_model: type[BaseModel] = tool.input_model  # type: ignore[attr-defined]
     if input_model is None or not issubclass(input_model, BaseModel):
-        raise TypeError(
-            f"Tool {tool.name!r} is missing a Pydantic ``input_model`` attribute"
-        )
+        raise TypeError(f"Tool {tool.name!r} is missing a Pydantic ``input_model`` attribute")
     description = (
         (tool.__class__.__doc__ or "").strip()
         or (getattr(input_model, "__doc__", "") or "").strip()
