@@ -57,6 +57,12 @@ def chunk_markdown(
         body = "\n".join(current_lines).strip()
         if not body:
             return
+        # Drop "buffer is only heading lines" — happens when a document opens
+        # with H1 + blank line before the first H2/H3. We want the H1 to
+        # remain in the heading trail, not emit an empty section.
+        if all(_HEADING_RE.match(line) or not line.strip() for line in current_lines):
+            current_lines.clear()
+            return
         heading = " > ".join(h for h in heading_trail[1:] if h) or "(no heading)"
         for piece in _split_long(body, max_chars=max_chars):
             chunks.append(
