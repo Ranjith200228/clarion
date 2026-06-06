@@ -39,8 +39,9 @@ log = logging.getLogger(__name__)
 # inputs are contravariant, outputs are covariant.
 InputT_contra = TypeVar("InputT_contra", bound=BaseModel, contravariant=True)
 OutputT_co = TypeVar("OutputT_co", bound=ToolOutput, covariant=True)
-# Plain typevar used by run_with_retry, which is just an internal helper.
-RetryT = TypeVar("RetryT", bound=ToolOutput)
+# Plain typevar used by run_with_retry — unbounded since callers retry
+# arbitrary fns, not just tool outputs (e.g. store query results).
+RetryT = TypeVar("RetryT")
 
 
 @dataclass(frozen=True)
