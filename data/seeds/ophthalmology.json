@@ -1,0 +1,43 @@
+{
+  "providers": [
+    {
+      "provider_id": "prov_oph_smith",
+      "full_name": "Dr. Eliza Smith",
+      "specialties": ["Cataract Pre-Op Consult", "Routine Eye Exam"],
+      "location": "North Shore Main Campus",
+      "accepts_new_patients": true
+    },
+    {
+      "provider_id": "prov_oph_patel",
+      "full_name": "Dr. Anand Patel",
+      "specialties": ["Glaucoma Follow-Up", "Diabetic Retinopathy Screening"],
+      "location": "North Shore Main Campus",
+      "accepts_new_patients": false
+    },
+    {
+      "provider_id": "prov_oph_chen",
+      "full_name": "Dr. Mei Chen",
+      "specialties": ["Post-Op LASIK Follow-Up", "Routine Eye Exam"],
+      "location": "North Shore Westside",
+      "accepts_new_patients": true
+    }
+  ],
+  "availability": [
+    {"slot_id": "slot_oph_001", "provider_id": "prov_oph_smith", "appointment_type": "Cataract Pre-Op Consult",     "slot_date": "2026-06-15", "start_time": "09:00:00", "duration_minutes": 60},
+    {"slot_id": "slot_oph_002", "provider_id": "prov_oph_smith", "appointment_type": "Cataract Pre-Op Consult",     "slot_date": "2026-06-15", "start_time": "10:30:00", "duration_minutes": 60},
+    {"slot_id": "slot_oph_003", "provider_id": "prov_oph_smith", "appointment_type": "Routine Eye Exam",            "slot_date": "2026-06-16", "start_time": "08:30:00", "duration_minutes": 30},
+    {"slot_id": "slot_oph_004", "provider_id": "prov_oph_patel", "appointment_type": "Glaucoma Follow-Up",          "slot_date": "2026-06-16", "start_time": "13:00:00", "duration_minutes": 20},
+    {"slot_id": "slot_oph_005", "provider_id": "prov_oph_patel", "appointment_type": "Glaucoma Follow-Up",          "slot_date": "2026-06-17", "start_time": "13:30:00", "duration_minutes": 20},
+    {"slot_id": "slot_oph_006", "provider_id": "prov_oph_patel", "appointment_type": "Diabetic Retinopathy Screening","slot_date": "2026-06-17", "start_time": "14:00:00", "duration_minutes": 45},
+    {"slot_id": "slot_oph_007", "provider_id": "prov_oph_chen",  "appointment_type": "Post-Op LASIK Follow-Up",     "slot_date": "2026-06-18", "start_time": "09:30:00", "duration_minutes": 20},
+    {"slot_id": "slot_oph_008", "provider_id": "prov_oph_chen",  "appointment_type": "Post-Op LASIK Follow-Up",     "slot_date": "2026-06-19", "start_time": "10:00:00", "duration_minutes": 20},
+    {"slot_id": "slot_oph_009", "provider_id": "prov_oph_chen",  "appointment_type": "Routine Eye Exam",            "slot_date": "2026-06-19", "start_time": "11:00:00", "duration_minutes": 30},
+    {"slot_id": "slot_oph_010", "provider_id": "prov_oph_smith", "appointment_type": "Cataract Pre-Op Consult",     "slot_date": "2026-06-22", "start_time": "09:00:00", "duration_minutes": 60}
+  ],
+  "eligibility": [
+    {"patient_id": "pat_001", "payer": "Aetna",           "member_id": "AET-9981", "status": "active",   "plan_name": "Aetna Open Access", "effective_date": "2026-01-01"},
+    {"patient_id": "pat_002", "payer": "Blue Cross",      "member_id": "BCB-3320", "status": "active",   "plan_name": "BCBS PPO",          "effective_date": "2025-09-01"},
+    {"patient_id": "pat_003", "payer": "United",          "member_id": "UHC-7710", "status": "inactive", "plan_name": "United Choice",     "effective_date": "2024-01-01", "termination_date": "2025-12-31"},
+    {"patient_id": "pat_004", "payer": "Medicare",        "member_id": "MCR-4421", "status": "active",   "plan_name": "Medicare Part B",   "effective_date": "2024-06-01"}
+  ]
+}
