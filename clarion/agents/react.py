@@ -1,0 +1,190 @@
+"""ReAct loop and tool dispatch.
+
+The loop is intentionally small:
+
+    for _ in range(max_steps):
+        response = llm.complete(messages, tools=specs)
+        messages.append(assistant_msg_from(response))
+        if not response.tool_calls:
+            return response.content or ""
+        for call in response.tool_calls:
+            result = dispatcher.dispatch(call)
+            messages.append(tool_msg(call, result))
+
+Everything below is plumbing — validating the LLM's tool args against
+the tool's Pydantic input, catching exceptions and surfacing them as
+ok=False replies, capping the steps so a broken LLM script can't burn
+through a budget.
+"""
+
+from __future__ import annotations
+
+import logging
+import uuid
+from dataclasses import dataclass, field
+from typing import Any
+
+from pydantic import ValidationError
+
+from clarion.agents.llm import (
+    LLMClient,
+    LLMResponse,
+    Message,
+    ToolCall,
+    json_dumps,
+)
+from clarion.agents.openai_schema import tools_to_specs
+from clarion.config import CustomerConfig
+from clarion.schemas.tools import ToolOutput
+from clarion.tools.base import Tool, ToolContext, ToolError
+from clarion.tools.registry import (
+    ToolNotEnabledError,
+    available_tools,
+    get_tool,
+)
+
+log = logging.getLogger(__name__)
+
+DEFAULT_MAX_STEPS = 8
+
+
+@dataclass
+class StepRecord:
+    """One LLM call + its tool-call fanout. Used for tracing + tests."""
+
+    assistant_content: str | None
+    tool_calls: list[ToolCall] = field(default_factory=list)
+    tool_results: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
+class ReactResult:
+    final_text: str
+    steps: list[StepRecord]
+    stopped_for_max_steps: bool = False
+
+
+class ToolDispatcher:
+    """Run validated tool calls and surface failures as ok=False outputs.
+
+    Holds the per-conversation ``ToolContext`` so individual call sites
+    don't have to thread it through.
+    """
+
+    def __init__(self, customer: CustomerConfig, ctx: ToolContext) -> None:
+        self._customer = customer
+        self._ctx = ctx
+
+    def dispatch(self, call: ToolCall) -> dict[str, Any]:
+        """Execute one tool call. Always returns a dict for the LLM."""
+        try:
+            tool = get_tool(call.name, self._customer)
+        except ToolNotEnabledError as e:
+            return {"ok": False, "error": str(e)}
+
+        try:
+            input_obj = _validate_input(tool, call.arguments)
+        except ValidationError as e:
+            return {"ok": False, "error": f"invalid arguments: {e.errors()}"}
+
+        try:
+            output = tool.run(input_obj, self._ctx)
+        except ToolError as e:
+            return {"ok": False, "error": str(e)}
+        except Exception as e:
+            log.exception("Unexpected error in tool %s", call.name)
+            return {"ok": False, "error": f"unexpected error: {e}"}
+
+        return _output_to_dict(output)
+
+
+def react_loop(
+    *,
+    llm: LLMClient,
+    messages: list[Message],
+    customer: CustomerConfig,
+    ctx: ToolContext,
+    max_steps: int = DEFAULT_MAX_STEPS,
+) -> ReactResult:
+    """Drive the loop until the LLM stops asking for tool calls.
+
+    ``messages`` is mutated in place — callers (e.g. ``Agent``) keep the
+    full transcript on their side.
+    """
+    specs = tools_to_specs(available_tools(customer))
+    dispatcher = ToolDispatcher(customer, ctx)
+    steps: list[StepRecord] = []
+
+    for step_i in range(max_steps):
+        response = llm.complete(messages, tools=specs)
+        step = StepRecord(
+            assistant_content=response.content,
+            tool_calls=list(response.tool_calls),
+        )
+        messages.append(_assistant_message(response))
+
+        if not response.tool_calls:
+            steps.append(step)
+            return ReactResult(final_text=response.content or "", steps=steps)
+
+        for call in response.tool_calls:
+            # Ensure every call has a stable id (some LLMs emit empty ones).
+            call_id = call.id or f"call_{uuid.uuid4().hex[:8]}"
+            normalized = ToolCall(id=call_id, name=call.name, arguments=call.arguments)
+            result = dispatcher.dispatch(normalized)
+            step.tool_results.append(result)
+            messages.append(
+                Message.tool(
+                    call_id=call_id,
+                    name=call.name,
+                    content=json_dumps(result),
+                )
+            )
+        steps.append(step)
+        log.debug("react step %d done (%d tool calls)", step_i, len(response.tool_calls))
+
+    # Ran out of steps without the LLM producing a final text turn.
+    return ReactResult(
+        final_text=(
+            "I'm having trouble completing that — let me have a teammate " "call you back."
+        ),
+        steps=steps,
+        stopped_for_max_steps=True,
+    )
+
+
+# ---------- helpers ----------
+
+
+def _assistant_message(response: LLMResponse) -> Message:
+    return Message.assistant(text=response.content, tool_calls=response.tool_calls)
+
+
+def _validate_input(tool: Tool[Any, Any], arguments: dict[str, Any]) -> Any:
+    """Re-validate tool args through the tool's Pydantic input model.
+
+    Defensive — the LLM may emit JSON that *looks* right but is missing
+    a required field. We surface that as an LLM-visible error rather
+    than letting it crash the tool.
+    """
+    input_model = tool.input_model  # type: ignore[attr-defined]
+    return input_model(**arguments)
+
+
+def _output_to_dict(output: Any) -> dict[str, Any]:
+    if isinstance(output, ToolOutput):
+        # ``mode="json"`` makes dates / Enums serialize as strings the LLM
+        # can read directly.
+        return output.model_dump(mode="json")
+    if isinstance(output, dict):
+        return output
+    return {"ok": True, "data": output}
+
+
+__all__ = [
+    "DEFAULT_MAX_STEPS",
+    "ReactResult",
+    "StepRecord",
+    "ToolDispatcher",
+    "react_loop",
+]
