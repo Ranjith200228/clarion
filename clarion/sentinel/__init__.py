@@ -1,6 +1,7 @@
 """Sentinel trust engine: guardrails + PHI redaction + audit (Phase 6),
 LLM-as-judge (Phase 10), escalation scorer (Phase 11)."""
 
+from clarion.sentinel.audit import AuditLog, AuditTurn, new_conversation_id
 from clarion.sentinel.guardrails import (
     GuardrailHit,
     GuardrailKind,
@@ -10,11 +11,14 @@ from clarion.sentinel.guardrails import (
 from clarion.sentinel.phi import RedactionResult, redact, redact_with_counts
 
 __all__ = [
+    "AuditLog",
+    "AuditTurn",
     "GuardrailHit",
     "GuardrailKind",
     "RedactionResult",
     "detect_clinical_advice_request",
     "detect_emergency",
+    "new_conversation_id",
     "redact",
     "redact_with_counts",
 ]
