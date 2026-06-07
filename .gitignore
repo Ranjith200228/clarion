@@ -38,6 +38,7 @@ data/personas/*
 !data/personas/.gitkeep
 !data/personas/*/
 !data/personas/**/.gitkeep
+!data/personas/*.json
 data/*.sqlite
 data/*.db
 data/*.faiss
