@@ -35,6 +35,7 @@ from clarion.agents.llm import LLMClient, Message
 from clarion.agents.prompt import PromptContext, build_system_prompt
 from clarion.agents.react import DEFAULT_MAX_STEPS, ReactResult, react_loop
 from clarion.config import CustomerConfig
+from clarion.observability import Tracer, TraceWriter
 from clarion.pipelines.structured import StructuredStore
 from clarion.rag.builder import load_customer_retriever
 from clarion.rag.retriever import Retriever
@@ -79,6 +80,11 @@ class Agent:
     # short-circuits) is appended with PHI redaction.
     audit: AuditLog | None = None
 
+    # Optional trace writer. When set, every chat turn emits a JSONL
+    # trace with full span hierarchy (agent.chat → retrieval → react.step
+    # → llm.complete + tool.<name>).
+    traces: TraceWriter | None = None
+
     # Guardrails are on by default. The agent NEVER lets a flagged user
     # message reach the LLM — short-circuits with a canned reply and an
     # urgent task for emergencies. Set to False only in tests that need
@@ -94,17 +100,44 @@ class Agent:
 
     def chat(self, user_message: str) -> str:
         """Advance the conversation by one user turn; return the agent's reply."""
+        tracer = Tracer(
+            customer_id=self.customer.customer_id,
+            conversation_id=self.audit.conversation_id if self.audit else None,
+        )
+        with tracer.span("agent.chat", user_chars=len(user_message)) as root:
+            reply = self._chat_inner(user_message, tracer)
+            root.set("reply_chars", len(reply))
+        if self.traces is not None:
+            self.traces.write(tracer.emit())
+        return reply
+
+    def _chat_inner(self, user_message: str, tracer: Tracer) -> str:
         # 1. Guardrails run BEFORE the LLM sees the message. They are
         #    cheap regex matches, so the cost is negligible and the
         #    safety story is unambiguous: an emergency phrase never
         #    reaches the model.
         if self.guardrails_enabled:
-            short_circuit = self._check_guardrails(user_message)
+            with tracer.span("guardrails.check") as g_span:
+                short_circuit = self._check_guardrails(user_message)
+                g_span.set("fired", short_circuit is not None)
             if short_circuit is not None:
                 return short_circuit
 
-        # 2. Normal path — system prompt + ReAct loop.
-        prompt_ctx = PromptContext(customer=self.customer, retriever=self.retriever)
+        # 2. Retrieval span (even when there's no retriever, so the
+        #    dashboard can spot configs that skipped RAG).
+        with tracer.span("retrieval") as r_span:
+            prompt_ctx = PromptContext(customer=self.customer, retriever=self.retriever)
+            hits = self.retriever.retrieve(user_message, k=4) if self.retriever is not None else []
+            r_span.update(
+                {
+                    "k": 4,
+                    "hit_count": len(hits),
+                    "top_score": hits[0].score if hits else None,
+                    "top_source": hits[0].chunk.source if hits else None,
+                }
+            )
+
+        # 3. System prompt + ReAct loop.
         system_prompt = build_system_prompt(prompt_ctx, user_message=user_message)
         self.transcript.append(Message.user(user_message))
         loop_messages: list[Message] = [Message.system(system_prompt), *self.transcript]
@@ -115,6 +148,7 @@ class Agent:
             customer=self.customer,
             ctx=self.ctx,
             max_steps=self.max_steps,
+            tracer=tracer,
         )
         self.transcript = loop_messages[1:]
         log.debug(
@@ -123,7 +157,7 @@ class Agent:
             result.stopped_for_max_steps,
         )
 
-        # 3. Audit-log this turn (PHI-redacted inside AuditLog.write).
+        # 4. Audit-log this turn (PHI-redacted inside AuditLog.write).
         if self.audit is not None:
             tool_calls = self._summarize_tool_calls(result)
             self.audit.write(
@@ -133,7 +167,10 @@ class Agent:
                     guardrail="safe",
                     tool_calls=tool_calls,
                     steps=len(result.steps),
-                    extra={"stopped_for_max_steps": result.stopped_for_max_steps},
+                    extra={
+                        "stopped_for_max_steps": result.stopped_for_max_steps,
+                        "trace_id": tracer.trace_id,
+                    },
                 )
             )
         return result.final_text
