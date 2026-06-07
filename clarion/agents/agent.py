@@ -96,6 +96,11 @@ class Agent:
     # full context on each turn.
     transcript: list[Message] = field(default_factory=list)
 
+    # Trace id of the most recent chat() turn. Set every turn; populated
+    # whether or not a TraceWriter is attached, so the API layer can
+    # echo it back to the client without re-reading any file.
+    last_trace_id: str = ""
+
     # ---------- public entry points ----------
 
     def chat(self, user_message: str) -> str:
@@ -104,6 +109,7 @@ class Agent:
             customer_id=self.customer.customer_id,
             conversation_id=self.audit.conversation_id if self.audit else None,
         )
+        self.last_trace_id = tracer.trace_id
         with tracer.span("agent.chat", user_chars=len(user_message)) as root:
             reply = self._chat_inner(user_message, tracer)
             root.set("reply_chars", len(reply))
