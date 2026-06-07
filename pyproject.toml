@@ -17,6 +17,9 @@ numpy = "^1.26"
 scikit-learn = "^1.5"   # TF-IDF fallback embedder (no API key required)
 faiss-cpu = "^1.8"      # vector index for dense embeddings
 openai = "^1.40"        # optional embedder (text-embedding-3-small)
+# Phase 8 — FastAPI service
+fastapi = "^0.115"
+uvicorn = { extras = ["standard"], version = "^0.30" }
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.6"
@@ -25,6 +28,7 @@ pytest-cov = "^5.0"
 mypy = "^1.10"
 pre-commit = "^3.7"
 types-pyyaml = "^6.0"
+httpx = "^0.27"  # FastAPI TestClient transport
 
 [build-system]
 requires = ["poetry-core"]
