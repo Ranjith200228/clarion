@@ -73,21 +73,28 @@ _EMERGENCY_PATTERNS: list[re.Pattern[str]] = [
 _CLINICAL_ADVICE_PATTERNS: list[re.Pattern[str]] = [
     re.compile(p, re.IGNORECASE)
     for p in (
-        r"\bshould\s+i\s+(?:take|stop|skip|increase|decrease|double|change)\b",
-        r"\bis\s+(?:it|this)\s+(?:safe|ok|normal|dangerous)\s+(?:to|if|for)\b",
+        # "Should I [clinical verb]" — covers medication / dosing decisions.
+        r"\bshould\s+i\s+(?:take|stop|skip|increase|decrease|double|change|ice|elevate)\b",
+        # "Is it/this safe / normal / dangerous". "ok" is dropped because
+        # "is it ok to reschedule" is operational, not clinical.
+        r"\bis\s+(?:it|this)\s+(?:safe|normal|dangerous)\s+(?:to|if|for)\b",
+        # "Is it ok to <clinical verb>" — narrower than bare "ok" so
+        # "is it ok to reschedule" stays operational.
+        r"\bis\s+it\s+ok\s+to\s+(?:ice|elevate|rest|take|stop|skip|increase|decrease|double|wrap)\b",
+        # "Can I take X with/while Y" — drug interaction phrasing.
         r"\bcan\s+i\s+take\s+\w+\s+(?:with|while)\b",
         r"\bwhat\s+(?:dose|dosage)\s+(?:of|should)\b",
         r"\bdiagnose\s+(?:me|my)\b",
         r"\bis\s+this\s+(?:cancer|serious|dangerous)\b",
-        r"\bdo\s+i\s+(?:have|need)\s+\w+\b(?:.{0,40})\?$",  # "do i have glaucoma?"
         r"\bshould\s+i\s+be\s+worried\s+about\b",
         # Drug interaction / dose questions.
         r"\b(?:interact|interaction)\s+with\s+\w+",
         r"\bhow\s+(?:much|many)\s+ibuprofen\b",
         r"\bdouble\s+(?:my|the)\s+dose\b",
         # Refill requests (per the rule corpora — no refill authority).
-        r"\b(?:refill|prescription)\s+(?:my|for)\b",
-        r"\brefill\s+(?:my\s+)?(?:medication|drops|prescription)\b",
+        # Must mention a medication-shaped object so "refill my coffee" doesn't trip.
+        r"\brefill\s+(?:my\s+|for\s+(?:my\s+)?)?(?:medication|meds|drops|prescription|rx|latanoprost|\w+drops)\b",
+        r"\b(?:refill|renew)\s+(?:my\s+)?prescription\b",
     )
 ]
 
