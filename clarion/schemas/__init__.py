@@ -8,6 +8,16 @@ from clarion.schemas.domain import (
     EligibilityStatus,
     Provider,
 )
+from clarion.schemas.scenarios import (
+    Difficulty,
+    GroundTruth,
+    HarnessReport,
+    HarnessResult,
+    Intent,
+    LLMScriptStep,
+    Outcome,
+    Scenario,
+)
 from clarion.schemas.tasks import PmsTask, TaskStatus
 from clarion.schemas.tools import (
     BookAppointmentInput,
@@ -36,10 +46,18 @@ __all__ = [
     "CheckEligibilityOutput",
     "CreatePmsTaskInput",
     "CreatePmsTaskOutput",
+    "Difficulty",
     "EligibilityRecord",
     "EligibilityStatus",
+    "GroundTruth",
+    "HarnessReport",
+    "HarnessResult",
+    "Intent",
+    "LLMScriptStep",
+    "Outcome",
     "PmsTask",
     "Provider",
+    "Scenario",
     "SearchSlotsInput",
     "SearchSlotsOutput",
     "TaskPriority",
