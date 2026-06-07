@@ -8,6 +8,12 @@ from clarion.schemas.domain import (
     EligibilityStatus,
     Provider,
 )
+from clarion.schemas.judge import (
+    JudgeRequest,
+    JudgeVerdict,
+    PolicyViolation,
+    PolicyViolationKind,
+)
 from clarion.schemas.scenarios import (
     Difficulty,
     GroundTruth,
@@ -53,8 +59,12 @@ __all__ = [
     "HarnessReport",
     "HarnessResult",
     "Intent",
+    "JudgeRequest",
+    "JudgeVerdict",
     "LLMScriptStep",
     "Outcome",
+    "PolicyViolation",
+    "PolicyViolationKind",
     "PmsTask",
     "Provider",
     "Scenario",
