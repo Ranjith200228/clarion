@@ -35,6 +35,7 @@ from clarion.agents.llm import (
 )
 from clarion.agents.openai_schema import tools_to_specs
 from clarion.config import CustomerConfig
+from clarion.observability import Tracer, cost_usd
 from clarion.schemas.tools import ToolOutput
 from clarion.tools.base import Tool, ToolContext, ToolError
 from clarion.tools.registry import (
@@ -67,16 +68,37 @@ class ReactResult:
 class ToolDispatcher:
     """Run validated tool calls and surface failures as ok=False outputs.
 
-    Holds the per-conversation ``ToolContext`` so individual call sites
-    don't have to thread it through.
+    Holds the per-conversation ``ToolContext`` and an optional ``Tracer``
+    so individual call sites don't have to thread either through.
     """
 
-    def __init__(self, customer: CustomerConfig, ctx: ToolContext) -> None:
+    def __init__(
+        self,
+        customer: CustomerConfig,
+        ctx: ToolContext,
+        *,
+        tracer: Tracer | None = None,
+    ) -> None:
         self._customer = customer
         self._ctx = ctx
+        self._tracer = tracer
 
     def dispatch(self, call: ToolCall) -> dict[str, Any]:
         """Execute one tool call. Always returns a dict for the LLM."""
+        if self._tracer is None:
+            return self._dispatch_inner(call)
+        with self._tracer.span(
+            f"tool.{call.name}",
+            tool=call.name,
+            arguments_keys=list(call.arguments.keys()),
+        ) as span:
+            result = self._dispatch_inner(call)
+            span.set("ok", bool(result.get("ok")))
+            if not result.get("ok") and result.get("error"):
+                span.set("error", str(result["error"])[:200])
+            return result
+
+    def _dispatch_inner(self, call: ToolCall) -> dict[str, Any]:
         try:
             tool = get_tool(call.name, self._customer)
         except ToolNotEnabledError as e:
@@ -105,43 +127,51 @@ def react_loop(
     customer: CustomerConfig,
     ctx: ToolContext,
     max_steps: int = DEFAULT_MAX_STEPS,
+    tracer: Tracer | None = None,
 ) -> ReactResult:
     """Drive the loop until the LLM stops asking for tool calls.
 
     ``messages`` is mutated in place — callers (e.g. ``Agent``) keep the
-    full transcript on their side.
+    full transcript on their side. If a ``tracer`` is provided, each
+    iteration emits a ``react.step`` span containing nested
+    ``llm.complete`` and ``tool.<name>`` spans annotated with tokens,
+    cost, and per-tool ok flags.
     """
     specs = tools_to_specs(available_tools(customer))
-    dispatcher = ToolDispatcher(customer, ctx)
+    dispatcher = ToolDispatcher(customer, ctx, tracer=tracer)
     steps: list[StepRecord] = []
 
     for step_i in range(max_steps):
-        response = llm.complete(messages, tools=specs)
-        step = StepRecord(
-            assistant_content=response.content,
-            tool_calls=list(response.tool_calls),
+        step_cm = (
+            tracer.span("react.step", step_index=step_i) if tracer is not None else _null_span()
         )
-        messages.append(_assistant_message(response))
-
-        if not response.tool_calls:
-            steps.append(step)
-            return ReactResult(final_text=response.content or "", steps=steps)
-
-        for call in response.tool_calls:
-            # Ensure every call has a stable id (some LLMs emit empty ones).
-            call_id = call.id or f"call_{uuid.uuid4().hex[:8]}"
-            normalized = ToolCall(id=call_id, name=call.name, arguments=call.arguments)
-            result = dispatcher.dispatch(normalized)
-            step.tool_results.append(result)
-            messages.append(
-                Message.tool(
-                    call_id=call_id,
-                    name=call.name,
-                    content=json_dumps(result),
-                )
+        with step_cm:
+            response = _complete_with_span(llm, messages, specs, tracer)
+            step = StepRecord(
+                assistant_content=response.content,
+                tool_calls=list(response.tool_calls),
             )
-        steps.append(step)
-        log.debug("react step %d done (%d tool calls)", step_i, len(response.tool_calls))
+            messages.append(_assistant_message(response))
+
+            if not response.tool_calls:
+                steps.append(step)
+                return ReactResult(final_text=response.content or "", steps=steps)
+
+            for call in response.tool_calls:
+                # Ensure every call has a stable id (some LLMs emit empty ones).
+                call_id = call.id or f"call_{uuid.uuid4().hex[:8]}"
+                normalized = ToolCall(id=call_id, name=call.name, arguments=call.arguments)
+                result = dispatcher.dispatch(normalized)
+                step.tool_results.append(result)
+                messages.append(
+                    Message.tool(
+                        call_id=call_id,
+                        name=call.name,
+                        content=json_dumps(result),
+                    )
+                )
+            steps.append(step)
+            log.debug("react step %d done (%d tool calls)", step_i, len(response.tool_calls))
 
     # Ran out of steps without the LLM producing a final text turn.
     return ReactResult(
@@ -154,6 +184,45 @@ def react_loop(
 
 
 # ---------- helpers ----------
+
+
+def _complete_with_span(
+    llm: LLMClient,
+    messages: list[Message],
+    specs: list[Any],
+    tracer: Tracer | None,
+) -> LLMResponse:
+    """Call ``llm.complete`` inside an ``llm.complete`` span when tracing is on."""
+    if tracer is None:
+        return llm.complete(messages, tools=specs)
+    with tracer.span("llm.complete", advertised_tools=len(specs)) as span:
+        response = llm.complete(messages, tools=specs)
+        usage = response.usage
+        cost = cost_usd(
+            usage.model,
+            input_tokens=usage.input_tokens,
+            output_tokens=usage.output_tokens,
+        )
+        span.update(
+            {
+                "model": usage.model,
+                "input_tokens": usage.input_tokens,
+                "output_tokens": usage.output_tokens,
+                "cost_usd": cost,
+                "tool_calls_count": len(response.tool_calls),
+            }
+        )
+        return response
+
+
+from collections.abc import Iterator  # noqa: E402
+from contextlib import contextmanager  # noqa: E402  (helper-only import)
+
+
+@contextmanager
+def _null_span() -> Iterator[None]:
+    """No-op context manager used when no tracer is provided."""
+    yield None
 
 
 def _assistant_message(response: LLMResponse) -> Message:
