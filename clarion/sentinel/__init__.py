@@ -8,6 +8,7 @@ from clarion.sentinel.guardrails import (
     detect_clinical_advice_request,
     detect_emergency,
 )
+from clarion.sentinel.judge import Judge
 from clarion.sentinel.phi import RedactionResult, redact, redact_with_counts
 
 __all__ = [
@@ -15,6 +16,7 @@ __all__ = [
     "AuditTurn",
     "GuardrailHit",
     "GuardrailKind",
+    "Judge",
     "RedactionResult",
     "detect_clinical_advice_request",
     "detect_emergency",
