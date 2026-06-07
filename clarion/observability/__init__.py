@@ -12,11 +12,13 @@ from clarion.observability.tracer import (
     Tracer,
     new_trace_id,
 )
+from clarion.observability.writer import TraceWriter
 
 __all__ = [
     "ModelPricing",
     "Span",
     "Trace",
+    "TraceWriter",
     "Tracer",
     "cost_usd",
     "known_models",
