@@ -18,6 +18,7 @@ from typing import Any
 
 from clarion.agents.llm import (
     LLMResponse,
+    LLMUsage,
     Message,
     ToolCall,
     ToolSpec,
@@ -76,9 +77,16 @@ class OpenAIClient:
         )
         choice = resp.choices[0]
         msg = choice.message
+        usage_obj = resp.usage
+        usage = LLMUsage(
+            model=resp.model or self._model,
+            input_tokens=usage_obj.prompt_tokens if usage_obj else 0,
+            output_tokens=usage_obj.completion_tokens if usage_obj else 0,
+        )
         return LLMResponse(
             content=msg.content,
             tool_calls=tuple(_from_openai_tool_call(tc) for tc in (msg.tool_calls or [])),
+            usage=usage,
         )
 
 

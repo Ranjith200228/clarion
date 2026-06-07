@@ -71,15 +71,33 @@ class Message:
 
 
 @dataclass(frozen=True)
+class LLMUsage:
+    """Token + model accounting for one LLM call.
+
+    The model field is what the observability layer (Phase 7) reads to
+    look up pricing. Tokens come straight from the provider's response
+    when available; FakeLLM defaults to zero so unit tests don't have to
+    estimate counts.
+    """
+
+    model: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
+@dataclass(frozen=True)
 class LLMResponse:
     """One assistant turn — either free-text content, tool calls, or both.
 
     Mirrors what OpenAI's ``chat.completions.create`` returns (we ignore
-    streaming for now; Phase 17 voice can add it).
+    streaming for now; Phase 17 voice can add it). ``usage`` carries the
+    token counts + model that Phase 7's observability layer feeds into
+    the cost calculator.
     """
 
     content: str | None = None
     tool_calls: tuple[ToolCall, ...] = ()
+    usage: LLMUsage = field(default_factory=LLMUsage)
 
 
 @dataclass(frozen=True)
