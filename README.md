@@ -17,13 +17,11 @@ Engineer story this project demonstrates.
 
 ## Status
 
-Phase 7 complete — every `Agent.chat` call produces a hierarchical
-trace (root `agent.chat` span containing `guardrails.check`,
-`retrieval`, and one `react.step` per loop iteration; each step
-contains `llm.complete` and one `tool.<name>` per tool call). Every
-`llm.complete` span carries model, input/output tokens, and cost in
-USD derived from a per-model pricing table. Traces are append-only
-JSONL per customer alongside the audit log.
+Phase 8 complete — the agent is exposed over HTTP. Three endpoints
+(`POST /chat`, `POST /evaluate`, `GET /health`) wired through a
+per-customer resource cache and a per-conversation Agent LRU. Both
+shipped customers run side-by-side; each request names its tenant
+explicitly. Swagger UI and ReDoc are auto-generated.
 
 ## Build phases
 
@@ -36,7 +34,7 @@ JSONL per customer alongside the audit log.
 | 5     | Text agent MVP (ReAct)                        | ✅ complete |
 | 6     | Guardrails (emergency / clinical / PHI)       | ✅ complete |
 | 7     | Observability (tokens, latency, cost, traces) | ✅ complete |
-| 8     | FastAPI service                               | pending |
+| 8     | FastAPI service                               | ✅ complete |
 | 9     | Simulation harness                            | pending |
 | 10    | Sentinel trust engine (LLM-as-judge)          | pending |
 | 11    | Escalation engine                             | pending |
@@ -415,6 +413,102 @@ Currently shipped (`clarion/observability/cost.py`):
 | `gpt-4-turbo` | 0.01 | 0.03 |
 
 Add new models in one place; every `llm.complete` span picks up the new pricing automatically.
+
+## HTTP API
+
+Run the service:
+
+```bash
+OPENAI_API_KEY=sk-... poetry run python -m api.app --port 8080
+# Or directly:
+OPENAI_API_KEY=sk-... poetry run uvicorn api.app:app --host 0.0.0.0 --port 8080
+```
+
+Once it's up:
+
+- **Swagger UI** — http://localhost:8080/docs
+- **ReDoc** — http://localhost:8080/redoc
+- **OpenAPI spec** — http://localhost:8080/openapi.json
+
+### Endpoints
+
+| Method | Path | Purpose |
+| ------ | ---- | ------- |
+| `GET`  | `/health` | Liveness probe; returns `status`, `version`, `customers_loaded` |
+| `POST` | `/chat` | Single user turn for one conversation. Allocates a `conversation_id` if the client omits it; echo it back to continue. |
+| `POST` | `/evaluate` | Run a scripted scenario (1–20 messages) and return per-turn replies plus aggregate metrics (tokens, cost, latency, tool usage). |
+
+### Example: chat (curl)
+
+```bash
+# First turn — no conversation_id; the server allocates one
+curl -s http://localhost:8080/chat \
+  -H 'content-type: application/json' \
+  -d '{"customer_id":"ophthalmology","message":"I want a cataract pre-op consult after June 1"}' \
+  | jq
+
+# Next turn — pass back the conversation_id from the previous response
+curl -s http://localhost:8080/chat \
+  -H 'content-type: application/json' \
+  -d '{"customer_id":"ophthalmology","conversation_id":"conv_abc123","message":"9 AM works"}' \
+  | jq
+```
+
+Response shape:
+
+```json
+{
+  "customer_id": "ophthalmology",
+  "conversation_id": "conv_abc123def456",
+  "trace_id": "trace_def456abc789",
+  "reply": "You're all set — Cataract Pre-Op Consult on June 15 at 9 AM with Dr. Smith."
+}
+```
+
+### Example: evaluate
+
+```bash
+curl -s http://localhost:8080/evaluate \
+  -H 'content-type: application/json' \
+  -d '{
+        "customer_id": "ophthalmology",
+        "scenario_id": "smoke_book_cataract",
+        "messages": [
+          "hi",
+          "I want a cataract pre-op consult after June 1"
+        ]
+      }' \
+  | jq
+```
+
+Returns `transcript`, `trace_ids`, and a `metrics` block with `turns`,
+`total_steps`, `total_input_tokens`, `total_output_tokens`,
+`total_cost_usd`, `total_latency_ms`, `tools_used`.
+
+### State + multi-tenancy
+
+- **Per-customer** (`CustomerConfig`, `StructuredStore`, `Retriever`, `AuditLog`, `TraceWriter`) is lazily loaded on first request and cached for the lifetime of the process.
+- **Per-conversation** Agents (one per `(customer_id, conversation_id)`) live in an LRU bounded by 256 sessions. Long-tail clients can't OOM the process.
+- Each `/chat` request advances the same transcript when the client echoes the `conversation_id` back. Each `/evaluate` always allocates a fresh `conversation_id` so scenario runs are isolated.
+- Audit + trace writers per customer remain shared, so all conversations for one tenant land in the same files. The Phase 13 dashboard reads them directly.
+
+### Error contract
+
+| Status | `code` | Meaning |
+| ------ | ------ | ------- |
+| 404    | `customer_not_found` | No YAML matching `customer_id` |
+| 400    | `customer_config_invalid` | YAML exists but failed schema validation |
+| 422    | (Pydantic default) | Request body fails validation (e.g. uppercase `customer_id`, empty `message`) |
+
+### Tests
+
+`tests/api/` runs entirely via `fastapi.testclient.TestClient` — **no real
+LLM calls in CI**. The conftest fixture wires a `FakeLLM` factory into
+the `SessionManager` so every test scripts the LLM's responses
+deterministically. 15 tests cover health, chat (happy path, tool-calling
+turn, transcript continuity, multi-tenant divergence, guardrail
+short-circuit, error mapping), and evaluate (scenario aggregation,
+mid-scenario guardrail handling, validation errors).
 
 ## Design principles
 
