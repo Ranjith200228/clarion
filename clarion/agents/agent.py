@@ -38,7 +38,24 @@ from clarion.config import CustomerConfig
 from clarion.pipelines.structured import StructuredStore
 from clarion.rag.builder import load_customer_retriever
 from clarion.rag.retriever import Retriever
+from clarion.sentinel import (
+    AuditLog,
+    AuditTurn,
+    detect_clinical_advice_request,
+    detect_emergency,
+)
 from clarion.tools.base import ToolContext
+
+# Canned guardrail responses. Short, neutral, customer-friendly.
+_EMERGENCY_REPLY = (
+    "This sounds like an emergency. Please call 911 or go to the nearest "
+    "emergency department right now. I've also flagged this for our care team "
+    "so they can follow up."
+)
+_CLINICAL_ADVICE_REPLY = (
+    "That's a clinical question I'm not able to answer over the phone. I'll "
+    "take a message for one of our clinicians to call you back."
+)
 
 log = logging.getLogger(__name__)
 
@@ -58,6 +75,16 @@ class Agent:
     retriever: Retriever | None = None
     max_steps: int = DEFAULT_MAX_STEPS
 
+    # Optional audit log. When set, every chat turn (including guardrail
+    # short-circuits) is appended with PHI redaction.
+    audit: AuditLog | None = None
+
+    # Guardrails are on by default. The agent NEVER lets a flagged user
+    # message reach the LLM — short-circuits with a canned reply and an
+    # urgent task for emergencies. Set to False only in tests that need
+    # to validate the ReAct loop in isolation.
+    guardrails_enabled: bool = True
+
     # Rolling transcript — excludes the system message (rebuilt per turn)
     # but includes every user / assistant / tool message so the LLM has
     # full context on each turn.
@@ -67,11 +94,18 @@ class Agent:
 
     def chat(self, user_message: str) -> str:
         """Advance the conversation by one user turn; return the agent's reply."""
+        # 1. Guardrails run BEFORE the LLM sees the message. They are
+        #    cheap regex matches, so the cost is negligible and the
+        #    safety story is unambiguous: an emergency phrase never
+        #    reaches the model.
+        if self.guardrails_enabled:
+            short_circuit = self._check_guardrails(user_message)
+            if short_circuit is not None:
+                return short_circuit
+
+        # 2. Normal path — system prompt + ReAct loop.
         prompt_ctx = PromptContext(customer=self.customer, retriever=self.retriever)
         system_prompt = build_system_prompt(prompt_ctx, user_message=user_message)
-
-        # Each LLM call sees a freshly built system message followed by the
-        # full prior transcript and the new user turn.
         self.transcript.append(Message.user(user_message))
         loop_messages: list[Message] = [Message.system(system_prompt), *self.transcript]
 
@@ -82,15 +116,108 @@ class Agent:
             ctx=self.ctx,
             max_steps=self.max_steps,
         )
-        # Replay the loop-side mutations back onto our transcript,
-        # skipping the system message we prepended.
         self.transcript = loop_messages[1:]
         log.debug(
             "agent chat: steps=%d, max_steps_hit=%s",
             len(result.steps),
             result.stopped_for_max_steps,
         )
+
+        # 3. Audit-log this turn (PHI-redacted inside AuditLog.write).
+        if self.audit is not None:
+            tool_calls = self._summarize_tool_calls(result)
+            self.audit.write(
+                AuditTurn(
+                    user_message=user_message,
+                    agent_reply=result.final_text,
+                    guardrail="safe",
+                    tool_calls=tool_calls,
+                    steps=len(result.steps),
+                    extra={"stopped_for_max_steps": result.stopped_for_max_steps},
+                )
+            )
         return result.final_text
+
+    # ---------- guardrail short-circuits ----------
+
+    def _check_guardrails(self, user_message: str) -> str | None:
+        """If a guardrail fires, return the canned reply and log it.
+        Otherwise return None so chat() falls through to the LLM."""
+        emergency = detect_emergency(user_message)
+        if emergency.fired:
+            self._handle_emergency(user_message)
+            return _EMERGENCY_REPLY
+        clinical = detect_clinical_advice_request(user_message)
+        if clinical.fired:
+            self._handle_clinical_advice(user_message)
+            return _CLINICAL_ADVICE_REPLY
+        return None
+
+    def _handle_emergency(self, user_message: str) -> None:
+        """File an urgent PMS task and append to the transcript + audit."""
+        # File the urgent task. Tools never raise to the agent, so this
+        # is best-effort: failure to file is logged and ignored.
+        task_id: str | None = None
+        try:
+            from clarion.schemas.tools import CreatePmsTaskInput
+            from clarion.tools.create_pms_task import CreatePmsTaskTool
+
+            out = CreatePmsTaskTool().run(
+                CreatePmsTaskInput(
+                    subject="EMERGENCY caller — escalate immediately",
+                    body=(
+                        "Caller described a possible emergency. The agent "
+                        "advised 911 / ED and did not attempt to book. "
+                        "Verbatim message (PHI-redacted in audit log)."
+                    ),
+                    priority="urgent",
+                ),
+                self.ctx,
+            )
+            task_id = out.task_id
+        except Exception:
+            log.exception("emergency task creation failed")
+
+        self.transcript.append(Message.user(user_message))
+        self.transcript.append(Message.assistant(text=_EMERGENCY_REPLY))
+        if self.audit is not None:
+            self.audit.write(
+                AuditTurn(
+                    user_message=user_message,
+                    agent_reply=_EMERGENCY_REPLY,
+                    guardrail="emergency",
+                    extra={"escalation_task_id": task_id},
+                )
+            )
+
+    def _handle_clinical_advice(self, user_message: str) -> None:
+        self.transcript.append(Message.user(user_message))
+        self.transcript.append(Message.assistant(text=_CLINICAL_ADVICE_REPLY))
+        if self.audit is not None:
+            self.audit.write(
+                AuditTurn(
+                    user_message=user_message,
+                    agent_reply=_CLINICAL_ADVICE_REPLY,
+                    guardrail="clinical_advice",
+                )
+            )
+
+    @staticmethod
+    def _summarize_tool_calls(result: ReactResult) -> list[dict[str, object]]:
+        """Flatten react steps into a list of tool-call dicts the audit
+        log can persist."""
+        out: list[dict[str, object]] = []
+        for step in result.steps:
+            for call, reply in zip(step.tool_calls, step.tool_results, strict=False):
+                out.append(
+                    {
+                        "name": call.name,
+                        "arguments": call.arguments,
+                        "ok": reply.get("ok"),
+                        "error": reply.get("error"),
+                    }
+                )
+        return out
 
     # ---------- convenience constructors ----------
 
