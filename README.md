@@ -17,11 +17,12 @@ Engineer story this project demonstrates.
 
 ## Status
 
-Phase 8 complete — the agent is exposed over HTTP. Three endpoints
-(`POST /chat`, `POST /evaluate`, `GET /health`) wired through a
-per-customer resource cache and a per-conversation Agent LRU. Both
-shipped customers run side-by-side; each request names its tenant
-explicitly. Swagger UI and ReDoc are auto-generated.
+Phase 9 complete — 100 synthetic patient scenarios per customer
+(200 total) with ground truth, expected tool calls, and canned LLM
+scripts for deterministic CI runs. The harness drives them through
+the real Agent (scripted FakeLLM in CI, real OpenAI in dev) and
+emits a `HarnessReport` with `by_difficulty` / `by_intent` rollups.
+Both shipped customers pass 100/100 scenarios in scripted mode.
 
 ## Build phases
 
@@ -35,7 +36,7 @@ explicitly. Swagger UI and ReDoc are auto-generated.
 | 6     | Guardrails (emergency / clinical / PHI)       | ✅ complete |
 | 7     | Observability (tokens, latency, cost, traces) | ✅ complete |
 | 8     | FastAPI service                               | ✅ complete |
-| 9     | Simulation harness                            | pending |
+| 9     | Simulation harness                            | ✅ complete |
 | 10    | Sentinel trust engine (LLM-as-judge)          | pending |
 | 11    | Escalation engine                             | pending |
 | 12    | Evaluation framework                          | pending |
@@ -509,6 +510,101 @@ deterministically. 15 tests cover health, chat (happy path, tool-calling
 turn, transcript continuity, multi-tenant divergence, guardrail
 short-circuit, error mapping), and evaluate (scenario aggregation,
 mid-scenario guardrail handling, validation errors).
+
+## Simulation harness
+
+`clarion.simulator` produces 100 synthetic patient scenarios per
+customer and runs them through the real Agent for end-to-end grading.
+
+```bash
+# Regenerate the persona JSONs (idempotent — same seed each time)
+poetry run python -m clarion.simulator.cli generate ophthalmology
+poetry run python -m clarion.simulator.cli generate orthopedics
+poetry run python -m clarion.simulator.cli generate all
+
+# Run scripted-mode harness (no API key, deterministic, ~5s/customer)
+poetry run python -m clarion.simulator.cli run all --report-out reports/
+
+# Run live-mode against real OpenAI (requires OPENAI_API_KEY)
+poetry run python -m clarion.simulator.cli run ophthalmology --mode live
+```
+
+Sample output:
+
+```
+ophthalmology: 100/100 passed (100.0%); failed=0
+  difficulty=ambiguous       15/ 15 passed
+  difficulty=clear           69/ 69 passed
+  difficulty=emergency       10/ 10 passed
+  difficulty=rule_violating   6/  6 passed
+  intent=book                41/ 41 passed
+  intent=cancel               8/  8 passed
+  intent=clinical_advice     10/ 10 passed
+  intent=eligibility          8/  8 passed
+  intent=emergency           10/ 10 passed
+  intent=faq                 10/ 10 passed
+  intent=reschedule          13/ 13 passed
+```
+
+### Scenario shape
+
+Each scenario in `data/personas/<customer>.json` carries:
+
+```json
+{
+  "scenario_id": "ophthalmology_clear_book_001",
+  "customer_id": "ophthalmology",
+  "difficulty": "clear",
+  "intent": "book",
+  "messages": ["Hi, this is Jane Smith, patient id pat_001..."],
+  "ground_truth": {
+    "expected_outcome": "booked",
+    "should_escalate": false,
+    "expected_tools": ["search_slots", "book_appointment"],
+    "expected_appointment_type": "Cataract Pre-Op Consult",
+    "notes": "Clear booking request with patient id provided."
+  },
+  "llm_script": [
+    { "tool_calls": [{"name": "search_slots", "arguments": {...}}] },
+    { "tool_calls": [{"name": "book_appointment", "arguments": {...}}] },
+    { "content": "You're booked for Cataract Pre-Op Consult on June 15." }
+  ]
+}
+```
+
+The `llm_script` lets scripted mode replay deterministic agent behavior
+without an API key. Live mode ignores it.
+
+### Distribution across the 100 scenarios
+
+| Difficulty / Intent | Count |
+| ------------------- | ----- |
+| clear / book        | 25 |
+| clear / cancel      | 8 |
+| clear / reschedule  | 8 |
+| clear / eligibility | 8 |
+| clear / faq         | 10 |
+| clear / clinical_advice | 10 |
+| ambiguous / book    | 10 |
+| ambiguous / reschedule | 5 |
+| rule_violating / book | 6 |
+| emergency / emergency | 10 |
+
+Total = 100. Per-tenant divergence is automatic — orthopedics' cancel
++ reschedule scenarios route to `create_pms_task` instead of
+`cancel_appointment` because that's what its YAML says.
+
+### Acceptance
+
+Phase 9 spec: *"Harness can automatically run evaluations."* Met by:
+
+- 274 tests in CI include `tests/simulator/test_harness.py` which runs
+  all 200 scenarios across both customers and asserts 100% pass rate.
+- `python -m clarion.simulator.cli run all` exits 0 on green, non-zero
+  otherwise — gateable from CI.
+- Each scenario carries enough ground truth that Phase 10's LLM-judge
+  and Phase 12's metric suite can score richer dimensions on the same
+  data without regenerating.
 
 ## Design principles
 
