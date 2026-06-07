@@ -17,15 +17,15 @@ Engineer story this project demonstrates.
 
 ## Status
 
-Phase 5 complete — the agent. A ReAct loop with function calling sits on
-top of an LLM Protocol that has two implementations: `OpenAIClient`
-(production, gpt-4o-mini) and `FakeLLM` (deterministic, no API key, what
-CI uses). The system prompt is rebuilt every turn from per-customer
-persona + escalation thresholds + top-k RAG chunks against the current
-user message, so the LLM is always grounded in the practice's own rules.
-Both shipped customers (ophthalmology, orthopedics) are verified
-end-to-end: book → confirm flows and cancel-routes-to-task flows pass
-without changing a line of agent code between them.
+Phase 6 complete — guardrails sit in front of the ReAct loop and the
+LLM never sees an unsafe prompt. Emergency phrases ("I can't see",
+"compound fracture", "having a stroke") get a 911 / ED advisory and an
+urgent PMS task; clinical-advice questions ("should I take my drops",
+"is it safe to drive after dilation") get a clinician callback line.
+Every turn — including guardrail short-circuits — is appended to a
+per-customer JSONL audit log with PHI redacted (phones, SSNs, emails,
+member ids, patient ids tagged as `<PHONE>` / `<SSN>` / `<EMAIL>` /
+`<MEMBER_ID>` / `<PATIENT_ID>`).
 
 ## Build phases
 
@@ -36,7 +36,7 @@ without changing a line of agent code between them.
 | 3     | Dual data pipeline (RAG + SQLite)             | ✅ complete |
 | 4     | Schemas + mocked tools                        | ✅ complete |
 | 5     | Text agent MVP (ReAct)                        | ✅ complete |
-| 6     | Guardrails (emergency / clinical / PHI)       | pending |
+| 6     | Guardrails (emergency / clinical / PHI)       | ✅ complete |
 | 7     | Observability (tokens, latency, cost, traces) | pending |
 | 8     | FastAPI service                               | pending |
 | 9     | Simulation harness                            | pending |
@@ -308,6 +308,52 @@ and SQLite store exist on disk.
 | `tests/agents/test_e2e_orthopedics.py` | Patient asks to cancel — `cancel_appointment` is disabled for this customer, the registry returns `not enabled`, the next LLM turn files a PMS task per the practice's "all cancellations go to a human" rule. |
 | `tests/agents/test_e2e_orthopedics.py` | Inspection check — the tools advertised to the LLM are exactly the four orthopedics permits (no `cancel_appointment` ever leaks into the spec list). |
 | `tests/agents/test_e2e_orthopedics.py` | Reschedule emerges from `search_slots` + `book_appointment` + `create_pms_task` to cancel the old slot — no per-tenant code path. |
+
+## Guardrails
+
+Guardrails run **before** the ReAct loop sees a user message. If any
+fire, the LLM is bypassed — short-circuiting with a canned, customer-
+neutral reply.
+
+```python
+from pathlib import Path
+from clarion.agents import Agent
+from clarion.config import load_customer
+from clarion.sentinel import AuditLog
+# ... build store, retriever, llm as before ...
+
+agent = Agent.from_customer(
+    customer=load_customer("ophthalmology"),
+    llm=llm,
+    structured=store,
+    retriever=retriever,
+)
+agent.audit = AuditLog.for_customer("ophthalmology", data_dir=Path("data"))
+# guardrails_enabled defaults to True; opt-out with agent.guardrails_enabled = False
+
+print(agent.chat("I suddenly lost my sight in my right eye!"))
+# → "This sounds like an emergency. Please call 911 or go to the nearest
+#    emergency department right now. I've also flagged this for our care
+#    team so they can follow up."
+# (LLM never consulted; urgent PMS task filed; audit row with guardrail="emergency")
+```
+
+### What's covered
+
+| Guardrail | Trigger examples | Agent response | Side effects |
+| --------- | ---------------- | -------------- | ------------ |
+| Emergency | "I can't see", "compound fracture", "having a stroke", "I called 911", "lost control of my bladder", "this is an emergency" | Canned 911 / ED advisory | Urgent PMS task filed (`priority="urgent"`); audit `guardrail="emergency"` with `escalation_task_id` |
+| Clinical advice | "should I take/stop/double/skip X", "is it safe to Y", "can I take A with B", "what dose", "refill my prescription/medication/drops" | Canned "I'll have a clinician call back" | Audit `guardrail="clinical_advice"`; no PMS task |
+| PHI redaction | Applied to **all** audit log records (including LLM-handled turns) | — | User message + agent reply + tool-call arguments all sanitized: `<PHONE>`, `<SSN>`, `<EMAIL>`, `<MEMBER_ID>`, `<PATIENT_ID>` |
+| Audit log | Every chat turn | — | Append-only JSONL at `<data_dir>/<customer_id>/audit.jsonl` with timestamp, conversation_id, customer_id, redacted messages, redaction counts, guardrail flag, tool calls, step count |
+
+### Trigger curation
+
+Patterns live in [`clarion/sentinel/guardrails.py`](clarion/sentinel/guardrails.py) and are derived from each customer's `06_emergencies_and_escalation.md`. They are deliberately pattern-based (not LLM-based) so they're auditable and zero-latency. An LLM-as-judge layer (Phase 10) can vet ambiguous cases — the regex layer remains the cheap, deterministic floor.
+
+### Negative coverage
+
+The same test files also include 21 negative examples — "Should I bring sunglasses?", "Is it ok to reschedule?", "refill my coffee", "I broke my glasses", "mild knee pain" — all of which must **not** trip a guardrail. These prove the patterns aren't over-eager.
 
 ## Design principles
 
