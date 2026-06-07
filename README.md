@@ -17,15 +17,13 @@ Engineer story this project demonstrates.
 
 ## Status
 
-Phase 6 complete — guardrails sit in front of the ReAct loop and the
-LLM never sees an unsafe prompt. Emergency phrases ("I can't see",
-"compound fracture", "having a stroke") get a 911 / ED advisory and an
-urgent PMS task; clinical-advice questions ("should I take my drops",
-"is it safe to drive after dilation") get a clinician callback line.
-Every turn — including guardrail short-circuits — is appended to a
-per-customer JSONL audit log with PHI redacted (phones, SSNs, emails,
-member ids, patient ids tagged as `<PHONE>` / `<SSN>` / `<EMAIL>` /
-`<MEMBER_ID>` / `<PATIENT_ID>`).
+Phase 7 complete — every `Agent.chat` call produces a hierarchical
+trace (root `agent.chat` span containing `guardrails.check`,
+`retrieval`, and one `react.step` per loop iteration; each step
+contains `llm.complete` and one `tool.<name>` per tool call). Every
+`llm.complete` span carries model, input/output tokens, and cost in
+USD derived from a per-model pricing table. Traces are append-only
+JSONL per customer alongside the audit log.
 
 ## Build phases
 
@@ -37,7 +35,7 @@ member ids, patient ids tagged as `<PHONE>` / `<SSN>` / `<EMAIL>` /
 | 4     | Schemas + mocked tools                        | ✅ complete |
 | 5     | Text agent MVP (ReAct)                        | ✅ complete |
 | 6     | Guardrails (emergency / clinical / PHI)       | ✅ complete |
-| 7     | Observability (tokens, latency, cost, traces) | pending |
+| 7     | Observability (tokens, latency, cost, traces) | ✅ complete |
 | 8     | FastAPI service                               | pending |
 | 9     | Simulation harness                            | pending |
 | 10    | Sentinel trust engine (LLM-as-judge)          | pending |
@@ -354,6 +352,69 @@ Patterns live in [`clarion/sentinel/guardrails.py`](clarion/sentinel/guardrails.
 ### Negative coverage
 
 The same test files also include 21 negative examples — "Should I bring sunglasses?", "Is it ok to reschedule?", "refill my coffee", "I broke my glasses", "mild knee pain" — all of which must **not** trip a guardrail. These prove the patterns aren't over-eager.
+
+## Observability
+
+Every `Agent.chat` call emits one `Trace` with hierarchical `Span`s.
+Attach a `TraceWriter` to persist them as JSONL:
+
+```python
+from pathlib import Path
+from clarion.agents import Agent
+from clarion.config import load_customer
+from clarion.observability import TraceWriter
+from clarion.sentinel import AuditLog
+
+cfg = load_customer("ophthalmology")
+agent = Agent.build(customer=cfg, llm=llm, data_dir=Path("data"))
+agent.audit  = AuditLog.for_customer(cfg.customer_id, Path("data"))
+agent.traces = TraceWriter.for_customer(cfg.customer_id, Path("data"))
+agent.chat("Hi, I'd like a cataract pre-op consult after June 1.")
+# Writes one line to data/ophthalmology/traces.jsonl with the full span tree.
+```
+
+### Span hierarchy
+
+```
+agent.chat                    user_chars, reply_chars
+├── guardrails.check          fired: bool
+├── retrieval                 k, hit_count, top_score, top_source
+├── react.step                step_index
+│   ├── llm.complete          model, input_tokens, output_tokens,
+│   │                         cost_usd, advertised_tools, tool_calls_count
+│   ├── tool.search_slots     tool, ok, arguments_keys
+│   └── tool.book_appointment ...
+├── react.step
+│   ├── llm.complete
+│   └── tool.create_pms_task
+└── react.step
+    └── llm.complete          (final text reply, no tools)
+```
+
+### What's tracked
+
+| Spec line | How it's covered |
+| --------- | ---------------- |
+| Token usage | `LLMUsage(model, input_tokens, output_tokens)` populated from `OpenAIClient.complete`; flows into `llm.complete.attributes` |
+| Latency | Every span carries `duration_ms` from `time.perf_counter` (sub-ms accuracy) |
+| Cost | `cost_usd` per-model pricing table in `clarion/observability/cost.py`; unknown models report `0.0` so the gap is visible, not silently absorbed |
+| Tool usage | One `tool.<name>` span per call with `ok`, `arguments_keys`, optional `error` (truncated to 200 chars; arg values stay out of traces — that's the audit log's job) |
+| Retrieval quality | `retrieval` span with `hit_count`, `top_score`, `top_source` (citation file) |
+| JSON traces | `TraceWriter` appends one line per turn to `<data_dir>/<customer_id>/traces.jsonl` |
+| Span logging | `Tracer` is a stack-based context manager; parent/child links via `parent_id` |
+| Trace IDs | `trace_<12hex>`; auto-generated per chat; surfaced in the audit row's `extra.trace_id` so audit ↔ trace pivots are one-click |
+
+### Pricing table
+
+Currently shipped (`clarion/observability/cost.py`):
+
+| Model | Input ($/1k tokens) | Output ($/1k tokens) |
+| ----- | ------------------- | -------------------- |
+| `gpt-4o-mini` | 0.00015 | 0.0006 |
+| `gpt-4o` | 0.0025 | 0.01 |
+| `gpt-4-turbo` | 0.01 | 0.03 |
+
+Add new models in one place; every `llm.complete` span picks up the new pricing automatically.
 
 ## Design principles
 
