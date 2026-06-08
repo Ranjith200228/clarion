@@ -25,10 +25,7 @@ def _verdict_json(**overrides: object) -> str:
 
 def _llm(*responses: str) -> FakeLLM:
     return FakeLLM(
-        responses=[
-            LLMResponse(content=r, usage=LLMUsage(model="gpt-4o-mini"))
-            for r in responses
-        ]
+        responses=[LLMResponse(content=r, usage=LLMUsage(model="gpt-4o-mini")) for r in responses]
     )
 
 

@@ -176,9 +176,7 @@ def make_session_manager(
     llm_factory: Callable[[], LLMClient] = default_llm_factory,
     max_sessions: int = 256,
 ) -> SessionManager:
-    return SessionManager(
-        settings=settings, llm_factory=llm_factory, max_sessions=max_sessions
-    )
+    return SessionManager(settings=settings, llm_factory=llm_factory, max_sessions=max_sessions)
 
 
 def warmup_data_dir(path: Path) -> None:
