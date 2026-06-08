@@ -8,6 +8,12 @@ from clarion.schemas.domain import (
     EligibilityStatus,
     Provider,
 )
+from clarion.schemas.escalation import (
+    EscalationScore,
+    EscalationSignals,
+    EscalationStats,
+    EscalationWeights,
+)
 from clarion.schemas.judge import (
     JudgeRequest,
     JudgeVerdict,
@@ -55,6 +61,10 @@ __all__ = [
     "Difficulty",
     "EligibilityRecord",
     "EligibilityStatus",
+    "EscalationScore",
+    "EscalationSignals",
+    "EscalationStats",
+    "EscalationWeights",
     "GroundTruth",
     "HarnessReport",
     "HarnessResult",
