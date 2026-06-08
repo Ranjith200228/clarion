@@ -31,11 +31,12 @@ from clarion.rag.retriever import Retriever
 from clarion.schemas import (
     HarnessReport,
     HarnessResult,
+    JudgeRequest,
     Outcome,
     Scenario,
 )
 from clarion.schemas.scenarios import LLMScriptStep
-from clarion.sentinel import AuditLog
+from clarion.sentinel import AuditLog, Judge
 from clarion.tools.base import ToolContext
 
 log = logging.getLogger(__name__)
@@ -55,8 +56,14 @@ def run_scripted(
     retriever: Retriever | None,
     audit: AuditLog | None = None,
     traces: TraceWriter | None = None,
+    judge: Judge | None = None,
 ) -> HarnessReport:
-    """Run scenarios with a FakeLLM driven by each scenario's llm_script."""
+    """Run scenarios with a FakeLLM driven by each scenario's llm_script.
+
+    When ``judge`` is provided, every scenario's result also carries a
+    ``judge_verdict`` (booking correctness + hallucination + policy
+    violations from the Sentinel LLM-as-judge).
+    """
     return _run(
         scenarios,
         customer_config=customer_config,
@@ -65,6 +72,7 @@ def run_scripted(
         audit=audit,
         traces=traces,
         llm_factory=_make_scripted_llm_factory(),
+        judge=judge,
     )
 
 
@@ -77,6 +85,7 @@ def run_live(
     llm_client: LLMClient,
     audit: AuditLog | None = None,
     traces: TraceWriter | None = None,
+    judge: Judge | None = None,
 ) -> HarnessReport:
     """Run scenarios with a real LLM (e.g. ``OpenAIClient``)."""
     return _run(
@@ -87,6 +96,7 @@ def run_live(
         audit=audit,
         traces=traces,
         llm_factory=lambda _scenario: llm_client,
+        judge=judge,
     )
 
 
@@ -179,6 +189,7 @@ def _run(
     audit: AuditLog | None,
     traces: TraceWriter | None,
     llm_factory: LLMFactory,
+    judge: Judge | None = None,
 ) -> HarnessReport:
     results: list[HarnessResult] = []
     for s in scenarios:
@@ -190,6 +201,7 @@ def _run(
             audit=audit,
             traces=traces,
             llm_factory=llm_factory,
+            judge=judge,
         )
         results.append(result)
     return _build_report(customer_config.customer_id, results)
@@ -204,6 +216,7 @@ def _run_one(
     audit: AuditLog | None,
     traces: TraceWriter | None,
     llm_factory: LLMFactory,
+    judge: Judge | None = None,
 ) -> HarnessResult:
     tasks_before = len(structured.list_open_tasks())
 
@@ -251,6 +264,24 @@ def _run_one(
     if expected_set and not expected_set.issubset(actual_set):
         failure_reasons.append(f"missing tools: {sorted(expected_set - actual_set)}")
 
+    verdict = None
+    if judge is not None and replies:
+        # Build a JudgeRequest from the completed turn. Tool calls come
+        # from the agent's transcript (we already walked it for
+        # actual_tools above) — reconstruct {name, arguments, ok} dicts.
+        tool_call_dicts = _tool_calls_for_judge(agent.transcript)
+        rag_context = _rag_context_for_judge(retriever, scenario.messages[-1])
+        verdict = judge.judge(
+            JudgeRequest(
+                customer_id=scenario.customer_id,
+                user_message=scenario.messages[-1],
+                agent_reply=replies[-1],
+                tool_calls=tool_call_dicts,
+                rag_context=rag_context,
+                expected_appointment_type=scenario.ground_truth.expected_appointment_type,
+            )
+        )
+
     return HarnessResult(
         scenario_id=scenario.scenario_id,
         customer_id=scenario.customer_id,
@@ -263,7 +294,49 @@ def _run_one(
         trace_ids=trace_ids,
         passed=not failure_reasons,
         failure_reasons=failure_reasons,
+        judge_verdict=verdict.model_dump() if verdict is not None else None,
     )
+
+
+def _tool_calls_for_judge(transcript: list) -> list[dict[str, object]]:  # type: ignore[type-arg]
+    """Reconstruct a {name, arguments, ok} per tool call from the agent
+    transcript. The role='tool' message carries the JSON result; the
+    preceding assistant message carries the tool_calls list with the
+    arguments. We zip them in order."""
+    import json as _json
+
+    pending_calls: list[tuple[str, dict[str, object]]] = []
+    pending_results: list[dict[str, object]] = []
+    flat: list[dict[str, object]] = []
+    for msg in transcript:
+        if msg.role == "assistant" and msg.tool_calls:
+            for tc in msg.tool_calls:
+                pending_calls.append((tc.name, dict(tc.arguments)))
+        elif msg.role == "tool":
+            try:
+                result = _json.loads(msg.content or "{}")
+            except _json.JSONDecodeError:
+                result = {}
+            pending_results.append(result if isinstance(result, dict) else {})
+    for (name, args), result in zip(pending_calls, pending_results, strict=False):
+        flat.append(
+            {
+                "name": name,
+                "arguments": args,
+                "ok": bool(result.get("ok")),
+                "error": result.get("error"),
+            }
+        )
+    return flat
+
+
+def _rag_context_for_judge(retriever: Retriever | None, query: str) -> list[str]:
+    """Top-k chunk texts the agent would have seen for ``query``.
+    Returns [] when no retriever — the judge prompt handles the empty case."""
+    if retriever is None:
+        return []
+    hits = retriever.retrieve(query, k=4)
+    return [h.chunk.text for h in hits]
 
 
 def _classify_outcome(
@@ -329,5 +402,3 @@ def _build_report(customer_id: str, results: list[HarnessResult]) -> HarnessRepo
         by_intent=by_intent,
         results=results,
     )
-
-

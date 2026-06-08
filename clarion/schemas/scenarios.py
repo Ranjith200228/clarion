@@ -105,6 +105,10 @@ class HarnessResult(BaseModel):
     trace_ids: list[str]
     passed: bool
     failure_reasons: list[str] = Field(default_factory=list)
+    # Optional Phase 10 judge verdict. None when no judge was wired
+    # into the harness run; populated when the harness was given a
+    # Judge instance. Phase 12 reads this for richer metrics.
+    judge_verdict: Any = None  # forward-ref'd; clarion.schemas.JudgeVerdict
 
 
 class HarnessReport(BaseModel):
