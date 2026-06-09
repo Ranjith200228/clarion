@@ -1,17 +1,17 @@
-"""Assemble + write the Phase 12 consolidated ``EvaluationReport``.
+"""Assemble + write the consolidated ``EvaluationReport``.
 
-End-to-end entrypoints:
+End-to-end entrypoints (the Phase 13 contract):
 
 * ``build_report(customer_id, scenarios, report, traces_path=None)`` —
   pure function: HarnessReport in, EvaluationReport out. Used by the
-  unit tests and by ``run_evaluation``.
-* ``run_evaluation(customer_id, settings, mode='scripted')`` — full
-  pipeline: load personas, run the scripted harness, build the report,
-  return it. Used by the CLI.
+  unit tests and by ``clarion.evaluation.runner.run_evaluation``.
 * ``write_report(report, out_path)`` — JSON file writer.
 
-The report file lands at ``<data_dir>/<customer_id>/evaluation_report.json``
-by default; Phase 13's Streamlit dashboard reads it from there.
+Orchestration (load personas + run harness) lives in
+``clarion.evaluation.runner`` so this module stays focused on
+"HarnessResult + scenarios -> wire-shape EvaluationReport" and the
+Phase 14 Gradio UI can re-read the report without depending on
+anything in this file.
 """
 
 from __future__ import annotations
@@ -22,11 +22,7 @@ from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 
-from clarion.config import Settings, load_customer
 from clarion.evaluation.metrics import compute_metric_subset
-from clarion.pipelines.structured import StructuredStore
-from clarion.rag.builder import load_customer_retriever
-from clarion.rag.retriever import Retriever
 from clarion.schemas import (
     EvaluationCategoryBreakdown,
     EvaluationMetrics,
@@ -34,7 +30,6 @@ from clarion.schemas import (
     HarnessReport,
     Scenario,
 )
-from clarion.simulator.harness import load_scenarios, run_scripted
 
 log = logging.getLogger(__name__)
 
@@ -78,53 +73,6 @@ def build_report(
         by_difficulty=by_difficulty,
         by_intent=by_intent,
         headline=_headline(overall),
-    )
-
-
-def run_evaluation(
-    customer_id: str,
-    *,
-    settings: Settings,
-    mode: str = "scripted",
-) -> EvaluationReport:
-    """Load personas + structured store + retriever, run the harness,
-    build the report. Pure scripted mode for now (live mode wires through
-    the same way; the harness already supports it via ``run_live``)."""
-    if mode != "scripted":
-        raise NotImplementedError(
-            f"mode={mode!r} not yet wired into run_evaluation; "
-            f"the CLI exposes only scripted at the moment. Live mode "
-            f"is available via clarion.simulator.harness.run_live() + "
-            f"build_report() directly."
-        )
-
-    customer = load_customer(customer_id, settings=settings)
-    structured = StructuredStore.for_customer(customer.customer_id, settings.data_dir)
-    try:
-        retriever: Retriever | None = load_customer_retriever(customer, data_dir=settings.data_dir)
-    except FileNotFoundError:
-        log.warning(
-            "no prebuilt RAG index for %r — evaluation will run without retrieval",
-            customer_id,
-        )
-        retriever = None
-
-    personas_path = settings.data_dir / "personas" / f"{customer_id}.json"
-    scenarios = load_scenarios(personas_path)
-
-    harness_report = run_scripted(
-        scenarios,
-        customer_config=customer,
-        structured=structured,
-        retriever=retriever,
-    )
-
-    traces_path = settings.data_dir / customer_id / "traces.jsonl"
-    return build_report(
-        customer_id,
-        scenarios,
-        harness_report,
-        traces_path=traces_path if traces_path.exists() else None,
     )
 
 

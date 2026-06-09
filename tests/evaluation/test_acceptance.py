@@ -26,7 +26,7 @@ from pathlib import Path
 
 import pytest
 from clarion.config import CustomerConfig, Settings, load_customer
-from clarion.evaluation.report import build_report, write_report
+from clarion.evaluation.reporter import build_report, write_report
 from clarion.pipelines.structured import StructuredStore
 from clarion.schemas import (
     AvailabilitySlot,
