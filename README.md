@@ -17,15 +17,16 @@ Engineer story this project demonstrates.
 
 ## Status
 
-Phase 10 complete — the Sentinel LLM-as-judge grades each completed
-agent turn on booking correctness, hallucination, and policy
-violations. A `reflect()` framing wraps the same call so the agent can
-self-critique a draft before publishing. The judge is optionally wired
-into the harness so every scenario in a 100-scenario run gets a
-structured verdict alongside its rule-based pass/fail. Injected errors
-(wrong appointment type, hallucinated provider, missed emergency) are
-caught — the Phase 10 acceptance proof lives in
-`tests/sentinel/test_judge_acceptance.py`.
+Phase 11 complete — every harness scenario carries an `EscalationScore`
+with five sub-signals (low_confidence, repeated_clarification,
+rule_conflict, frustration, unsupported_request) plus an
+"already_escalated" short-circuit that treats guardrail short-circuits
+as the strongest predictor. `stats_from_run(scenarios, report)` folds
+the 100-scenario set into an `EscalationStats` (precision, recall, F1,
+accuracy, confusion matrix). 100% emergency recall on both customers;
+overall precision above 0.5 on both. Phases 10 (Sentinel LLM-as-judge)
+and 11 (escalation engine) plug into `HarnessResult` so Phase 12 can
+fold them into the consolidated evaluation report.
 
 ## Build phases
 
@@ -41,7 +42,7 @@ caught — the Phase 10 acceptance proof lives in
 | 8     | FastAPI service                               | ✅ complete |
 | 9     | Simulation harness                            | ✅ complete |
 | 10    | Sentinel trust engine (LLM-as-judge)          | ✅ complete |
-| 11    | Escalation engine                             | pending |
+| 11    | Escalation engine (5-signal score + P/R)      | ✅ complete |
 | 12    | Evaluation framework                          | pending |
 | 13    | Streamlit dashboard                           | pending |
 | 14    | Deployment (Cloud Run)                        | pending |
