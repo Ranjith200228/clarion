@@ -38,10 +38,12 @@ _FRUSTRATION_PATTERNS: list[re.Pattern[str]] = [
         r"\b(?:why\s+)?(?:can'?t|won'?t)\s+you\b",
         r"\bnot\s+(?:what|that'?s)\s+i\s+(?:asked|said|want)\b",
         # Demand for a human.
-        r"\b(?:let|put)\s+me\s+(?:speak|talk)\s+to\s+(?:a\s+)?"
+        r"\b(?:let|put)\s+me\s+(?:speak|talk|through)\s+to\s+(?:a\s+)?"
         r"(?:human|person|manager|supervisor|someone)\b",
-        r"\bi\s+(?:want|need)\s+to\s+speak\s+to\s+(?:a\s+)?"
-        r"(?:human|manager|supervisor|person)\b",
+        r"\bput\s+me\s+through\s+to\s+(?:a\s+)?"
+        r"(?:human|person|manager|supervisor|someone)\b",
+        r"\bi\s+(?:want|need)\s+to\s+(?:speak|talk)\s+to\s+(?:a\s+)?"
+        r"(?:human|manager|supervisor|person|someone)\b",
         # Anger / profanity-light markers.
         r"\bthis\s+is\s+(?:ridiculous|insane|unacceptable|absurd)\b",
         r"\bare\s+you\s+(?:kidding|joking|serious)\b",
@@ -139,14 +141,16 @@ def detect_frustration_over_turns(user_messages: list[str]) -> FrustrationResult
 # ---------- helpers ----------
 
 
-_SHOUT_RE = re.compile(r"[A-Z]{8,}")
+# A single 8+ char uppercase run OR two 2+ char uppercase words in a row
+# both count as shouting. The first catches STOPCALLINGME; the second
+# catches "PLEASE LISTEN TO ME" without flagging legitimate single
+# abbreviations like USA or ER.
+_SHOUT_RUN_RE = re.compile(r"[A-Z]{8,}")
+_SHOUT_MULTI_RE = re.compile(r"\b[A-Z]{2,}\b(?:\s+\b[A-Z]{2,}\b){1,}")
 
 
 def _has_shouting(message: str) -> bool:
-    """An 8+ char run of uppercase letters counts as shouting. Picks
-    up STOP-CALLING-ME and ARE YOU SERIOUS but not legitimate abbreviations
-    like USA or ER."""
-    return bool(_SHOUT_RE.search(message))
+    return bool(_SHOUT_RUN_RE.search(message) or _SHOUT_MULTI_RE.search(message))
 
 
 def _saturate(raw: int) -> float:
