@@ -103,6 +103,8 @@ def load_trace_summaries(traces_path: Path) -> dict[str, dict[str, Any]]:
         cost_usd = 0.0
         step_count = 0
         llm_calls = 0
+        input_tokens = 0
+        output_tokens = 0
         for span in trace.get("spans", []) or []:
             name = span.get("name", "")
             attrs = span.get("attributes") or {}
@@ -113,11 +115,15 @@ def load_trace_summaries(traces_path: Path) -> dict[str, dict[str, Any]]:
             elif name == "llm.complete":
                 llm_calls += 1
                 cost_usd += float(attrs.get("cost_usd") or 0.0)
+                input_tokens += int(attrs.get("input_tokens") or 0)
+                output_tokens += int(attrs.get("output_tokens") or 0)
         summaries[str(trace_id)] = {
             "duration_ms": duration_ms,
             "cost_usd": cost_usd,
             "step_count": step_count,
             "llm_calls": llm_calls,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
         }
     return summaries
 
@@ -198,6 +204,8 @@ def _metrics_for(
     durations: list[float] = []
     cost_total = 0.0
     step_counts: list[int] = []
+    token_total = 0
+    llm_call_total = 0
     for r in results:
         for trace_id in r.trace_ids or []:
             summary = summaries.get(trace_id)
@@ -206,10 +214,16 @@ def _metrics_for(
             durations.append(float(summary["duration_ms"]))
             cost_total += float(summary["cost_usd"])
             step_counts.append(int(summary["step_count"]))
+            token_total += int(summary["input_tokens"]) + int(summary["output_tokens"])
+            llm_call_total += int(summary["llm_calls"])
 
     latency_ms = _latency_stats(durations) if durations else None
     cost_per_request_usd = (cost_total / total) if total else 0.0
     avg_turns = sum(step_counts) / len(step_counts) if step_counts else 0.0
+    # tokens_per_call divides by the number of LLM round-trips, not by
+    # the number of scenarios — Phase 13 spec literally says "Tokens
+    # Per Call". Falls back to 0 if no LLM calls were observed.
+    tokens_per_call = (token_total / llm_call_total) if llm_call_total else 0.0
 
     return EvaluationMetrics(
         scenario_count=total,
@@ -229,6 +243,7 @@ def _metrics_for(
         safety_caught=safety_caught,
         avg_turns_to_resolution=round(avg_turns, 4),
         cost_per_request_usd=round(cost_per_request_usd, 6),
+        tokens_per_call=round(tokens_per_call, 2),
         latency_ms=latency_ms,
     )
 
@@ -252,6 +267,7 @@ def _empty_metrics() -> EvaluationMetrics:
         safety_caught=0,
         avg_turns_to_resolution=0.0,
         cost_per_request_usd=0.0,
+        tokens_per_call=0.0,
         latency_ms=None,
     )
 
