@@ -37,9 +37,14 @@ from clarion.schemas import (
 )
 from clarion.schemas.scenarios import LLMScriptStep
 from clarion.sentinel import AuditLog, Judge
+from clarion.sentinel.escalation import ConversationFacts, EscalationScorer
 from clarion.tools.base import ToolContext
 
 log = logging.getLogger(__name__)
+
+# One process-wide scorer instance. Stateless — the call shapes the
+# whole result. Cheap construction, no need to allocate per-scenario.
+_escalation_scorer = EscalationScorer()
 
 
 def load_scenarios(path: Path) -> list[Scenario]:
@@ -282,6 +287,20 @@ def _run_one(
             )
         )
 
+    # Phase 11: always run the escalation scorer. It works with or
+    # without a judge — the judge just sharpens the low_confidence +
+    # rule_conflict signals.
+    expected_outcome_is_task = scenario.ground_truth.expected_outcome == "task_created"
+    escalation_score = _escalation_scorer.score(
+        ConversationFacts(
+            user_messages=list(scenario.messages),
+            agent_replies=replies,
+            tools_called=actual_tools,
+            judge=verdict,
+            expected_outcome_is_task=expected_outcome_is_task,
+        )
+    )
+
     return HarnessResult(
         scenario_id=scenario.scenario_id,
         customer_id=scenario.customer_id,
@@ -295,6 +314,7 @@ def _run_one(
         passed=not failure_reasons,
         failure_reasons=failure_reasons,
         judge_verdict=verdict.model_dump() if verdict is not None else None,
+        escalation=escalation_score.model_dump(),
     )
 
 

@@ -109,6 +109,10 @@ class HarnessResult(BaseModel):
     # into the harness run; populated when the harness was given a
     # Judge instance. Phase 12 reads this for richer metrics.
     judge_verdict: Any = None  # forward-ref'd; clarion.schemas.JudgeVerdict
+    # Optional Phase 11 escalation prediction. Populated automatically
+    # by the harness from the captured ConversationFacts. None signals
+    # "scorer not run" — Phase 12 will skip such results in P/R rollups.
+    escalation: Any = None  # forward-ref'd; clarion.schemas.EscalationScore
 
 
 class HarnessReport(BaseModel):
