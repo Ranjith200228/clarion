@@ -75,6 +75,12 @@ class ConversationFacts:
     """When the scenario's ground truth expects a PMS task (e.g.
     orthopedics cancel), a create_pms_task call is NOT an unsupported
     request — it's the right answer."""
+    already_escalated: bool = False
+    """True when the conversation already produced a human handoff —
+    a PMS task was filed OR an emergency / clinical-advice guardrail
+    fired. The scorer treats this as ground truth from the system's
+    own actions (the guardrails are part of the prediction surface)
+    and short-circuits to score=1.0."""
 
 
 class EscalationScorer:
@@ -93,6 +99,20 @@ class EscalationScorer:
 
     def score(self, facts: ConversationFacts) -> EscalationScore:
         signals, reasons = self._compute_signals(facts)
+
+        # If the system ALREADY handed off (emergency / clinical guardrail
+        # fired or a PMS task was filed), short-circuit to score=1.0. The
+        # guardrails are part of the prediction surface; their outputs are
+        # evidence the system flagged this turn for escalation.
+        if facts.already_escalated:
+            return EscalationScore(
+                score=1.0,
+                signals=signals,
+                threshold=self._decision_threshold,
+                should_escalate=True,
+                reasons=["already_escalated", *reasons],
+            )
+
         composite = self._composite(signals)
         return EscalationScore(
             score=composite,
