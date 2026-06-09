@@ -710,6 +710,64 @@ Spec: *"Injected errors are detected."* Proven by
 Plus an inverse sanity test (`test_judge_passes_a_correct_booking`) so
 a regression where the judge always fails is caught.
 
+## Escalation engine
+
+`clarion.sentinel.escalation` produces a 0–1 escalation score per
+conversation turn, derived from five signals plus an "already escalated"
+short-circuit. Each scenario in the harness gets one attached:
+
+```python
+from clarion.sentinel.escalation import (
+    EscalationScorer,
+    ConversationFacts,
+    stats_from_run,
+)
+from clarion.simulator.harness import load_scenarios, run_scripted
+
+scenarios = load_scenarios("data/personas/ophthalmology.json")
+report = run_scripted(scenarios, ...)        # populates result.escalation
+stats = stats_from_run(scenarios, report)    # precision / recall / F1
+print(stats)
+```
+
+### Signals
+
+| Signal | Source | Notes |
+| ------ | ------ | ----- |
+| `low_confidence` | `1 - judge.confidence` if Judge attached; else regex on "I'm not sure" patterns in the agent reply | When no judge is wired, falls back to text heuristic |
+| `repeated_clarification` | count(agent replies ending in `?`) / `customer.escalation.max_clarifications` | Per-customer threshold from YAML |
+| `rule_conflict` | Judge flagged any `unsupported_claim` or `invented_*` policy violation | Requires Judge; 0 otherwise |
+| `frustration` | `detect_frustration_over_turns(user_messages).score` | Pattern-based: "I already told you", "let me speak to a manager", SHOUTING, `???`, etc |
+| `unsupported_request` | 1.0 when `create_pms_task` was called AND scenario.expected_outcome != "task_created" | Orthopedics cancel scenarios don't trip this (task IS the expected outcome) |
+| **`already_escalated`** (short-circuit) | A task was filed OR the reply contains "911" or "clinical" | When True, score=1.0; bypasses the weighted sum |
+
+### Composite
+
+```
+score = clip(0, 1, normalize(sum(signal * weight)))
+should_escalate = score >= decision_threshold   # default 0.5
+```
+
+Default weights (sum to 1.0): `low_confidence=0.30`,
+`repeated_clarification=0.15`, `rule_conflict=0.20`, `frustration=0.20`,
+`unsupported_request=0.15`. Tuned so any single severe signal crosses
+0.5, or two mild ones together do.
+
+### Precision / Recall acceptance
+
+The Phase 11 acceptance test runs all 100 scenarios per customer through
+the scripted harness and asserts:
+
+- `stats.total == 100` and all four confusion-matrix cells sum to 100
+- `recall == 1.0` on the 10 emergency-intent scenarios (no misses
+  allowed — these are the highest-stakes category)
+- `precision >= 0.5` overall (guards against a "predict True always"
+  scorer degeneration)
+
+Verified for both shipped customers. The `stats_from_run` helper takes a
+`HarnessReport` + the original scenarios and returns an
+`EscalationStats` ready to be folded into the Phase 12 evaluation report.
+
 ## Design principles
 
 1. **Text core first, voice as a shell.** Agent input is a transcript, output
