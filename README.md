@@ -17,16 +17,14 @@ Engineer story this project demonstrates.
 
 ## Status
 
-Phase 11 complete — every harness scenario carries an `EscalationScore`
-with five sub-signals (low_confidence, repeated_clarification,
-rule_conflict, frustration, unsupported_request) plus an
-"already_escalated" short-circuit that treats guardrail short-circuits
-as the strongest predictor. `stats_from_run(scenarios, report)` folds
-the 100-scenario set into an `EscalationStats` (precision, recall, F1,
-accuracy, confusion matrix). 100% emergency recall on both customers;
-overall precision above 0.5 on both. Phases 10 (Sentinel LLM-as-judge)
-and 11 (escalation engine) plug into `HarnessResult` so Phase 12 can
-fold them into the consolidated evaluation report.
+Phase 12 complete — `evaluation_report.json` per customer with every
+spec metric: containment, booking accuracy, hallucination rate
+(when judge attached), escalation precision/recall/F1/accuracy, safety
+catch rate, avg turns to resolution, cost per request (USD), latency
+avg/p50/p95. Plus per-difficulty and per-intent breakdowns and a
+six-key headline dict for the Phase 13 dashboard top strip. Both
+shipped customers meet the floor targets: containment >= 0.5,
+escalation recall >= 0.9, safety catch == 1.0.
 
 ## Build phases
 
@@ -43,6 +41,7 @@ fold them into the consolidated evaluation report.
 | 9     | Simulation harness                            | ✅ complete |
 | 10    | Sentinel trust engine (LLM-as-judge)          | ✅ complete |
 | 11    | Escalation engine (5-signal score + P/R)      | ✅ complete |
+| 12    | Evaluation framework (`evaluation_report.json`) | ✅ complete |
 | 12    | Evaluation framework                          | pending |
 | 13    | Streamlit dashboard                           | pending |
 | 14    | Deployment (Cloud Run)                        | pending |
@@ -768,6 +767,91 @@ the scripted harness and asserts:
 Verified for both shipped customers. The `stats_from_run` helper takes a
 `HarnessReport` + the original scenarios and returns an
 `EscalationStats` ready to be folded into the Phase 12 evaluation report.
+
+## Evaluation framework
+
+`clarion.evaluation` rolls a full harness run + scenarios + traces into
+a single `EvaluationReport` JSON per customer.
+
+```bash
+# Per customer
+poetry run python -m clarion.evaluation.cli run ophthalmology
+poetry run python -m clarion.evaluation.cli run orthopedics
+
+# Both, into a single reports/ dir
+poetry run python -m clarion.evaluation.cli run all --out reports/
+
+# CI-friendly: exit non-zero if pass_rate falls below 0.9
+poetry run python -m clarion.evaluation.cli run all --min-pass-rate 0.9
+```
+
+Output prints the six-key headline:
+
+```
+[ophthalmology] wrote .../data/ophthalmology/evaluation_report.json
+  containment_rate         0.740
+  booking_accuracy         1.000
+  hallucination_rate       0.000
+  escalation_precision     0.615
+  escalation_recall        1.000
+  safety_catch_rate        1.000
+```
+
+### Metrics
+
+| Metric | Source | Notes |
+| ------ | ------ | ----- |
+| `containment_rate` | `actual_outcome ∈ {booked, cancelled, info_provided}` | Fraction resolved without a handoff |
+| `booking_accuracy` | result.passed AND outcome=="booked" | Only over scenarios whose ground truth expects "booked" |
+| `hallucination_rate` | mean `judge.hallucination` | `None` when no judge ran on the scope |
+| `escalation_precision` / `_recall` / `_f1` / `_accuracy` | Phase 11 `compute_stats(predictions, ground_truth)` | Skips results without an escalation field |
+| `safety_catch_rate` | recall on intent ∈ {emergency, clinical_advice} | All safety scenarios must pass |
+| `avg_turns_to_resolution` | mean `react.step` count | From traces; 0 when no traces |
+| `cost_per_request_usd` | sum(`llm.complete.cost_usd`) / total | From traces; 0 when no traces |
+| `latency_ms` | `LatencyStats(avg, p50, p95, count)` | `None` when no traces |
+
+### Report shape
+
+```jsonc
+{
+  "customer_id": "ophthalmology",
+  "generated_at": "2026-06-06T...",
+  "scenario_count": 100,
+  "pass_rate": 1.0,
+  "metrics": { /* EvaluationMetrics */ },
+  "by_difficulty": { "clear": { "total": 69, "metrics": {...} }, ... },
+  "by_intent":     { "book":  { "total": 41, "metrics": {...} }, ... },
+  "headline": {
+    "containment_rate":     0.74,
+    "booking_accuracy":     1.0,
+    "hallucination_rate":   0.0,
+    "escalation_precision": 0.615,
+    "escalation_recall":    1.0,
+    "safety_catch_rate":    1.0
+  }
+}
+```
+
+The report is Pydantic-validated on write and re-validated on read by
+the Phase 12 acceptance test, so the wire shape is stable. Phase 13's
+Streamlit dashboard reads from `<data_dir>/<customer>/evaluation_report.json`
+and renders the headline + breakdowns directly.
+
+### Acceptance
+
+```python
+from clarion.evaluation import run_evaluation, write_report
+from clarion.config import get_settings
+
+report = run_evaluation("ophthalmology", settings=get_settings())
+write_report(report, "evaluation_report.json")
+```
+
+Phase 12 spec: *"Produce evaluation_report.json."* Met. The
+`tests/evaluation/test_acceptance.py` suite runs the full 100-scenario
+harness on both shipped customers, builds the report, round-trips
+through JSON, and asserts every spec metric is present and within
+range.
 
 ## Design principles
 
