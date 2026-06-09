@@ -14,6 +14,12 @@ from clarion.schemas.escalation import (
     EscalationStats,
     EscalationWeights,
 )
+from clarion.schemas.evaluation import (
+    EvaluationCategoryBreakdown,
+    EvaluationMetrics,
+    EvaluationReport,
+    LatencyStats,
+)
 from clarion.schemas.judge import (
     JudgeRequest,
     JudgeVerdict,
@@ -62,6 +68,9 @@ __all__ = [
     "EligibilityRecord",
     "EligibilityStatus",
     "EscalationScore",
+    "EvaluationCategoryBreakdown",
+    "EvaluationMetrics",
+    "EvaluationReport",
     "EscalationSignals",
     "EscalationStats",
     "EscalationWeights",
@@ -72,6 +81,7 @@ __all__ = [
     "JudgeRequest",
     "JudgeVerdict",
     "LLMScriptStep",
+    "LatencyStats",
     "Outcome",
     "PolicyViolation",
     "PolicyViolationKind",
