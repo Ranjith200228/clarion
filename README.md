@@ -30,27 +30,29 @@ escalation recall >= 0.9, safety catch == 1.0.
 
 | Phase | Scope | Status |
 | ----- | ----- | ------ |
-| 1     | Foundation (Poetry, Ruff, Pytest, Docker, CI) | ✅ complete |
-| 2     | Multi-tenant config system                    | ✅ complete |
-| 3     | Dual data pipeline (RAG + SQLite)             | ✅ complete |
-| 4     | Schemas + mocked tools                        | ✅ complete |
-| 5     | Text agent MVP (ReAct)                        | ✅ complete |
-| 6     | Guardrails (emergency / clinical / PHI)       | ✅ complete |
-| 7     | Observability (tokens, latency, cost, traces) | ✅ complete |
-| 8     | FastAPI service                               | ✅ complete |
-| 9     | Simulation harness                            | ✅ complete |
-| 10    | Sentinel trust engine (LLM-as-judge)          | ✅ complete |
-| 11    | Escalation engine (5-signal score + P/R)      | ✅ complete |
-| 12    | Evaluation framework (`evaluation_report.json`) | ✅ complete |
-| 12    | Evaluation framework                          | pending |
-| 13    | Streamlit dashboard                           | pending |
-| 14    | Deployment (Cloud Run)                        | pending |
-| 15    | Documentation                                 | pending |
-| 16    | LangGraph refactor                            | pending |
-| 17    | Voice layer                                   | pending |
-| 18    | Emotion detection                             | pending |
-| 19    | Production hardening                          | pending |
-| 20    | v1.0.0 release                                | pending |
+| 1     | Foundation (Poetry, Ruff, Pytest, Docker, CI)              | ✅ complete |
+| 2     | Multi-tenant config system                                 | ✅ complete |
+| 3     | Dual data pipeline (RAG + SQLite)                          | ✅ complete |
+| 4     | Schemas + mocked tools                                     | ✅ complete |
+| 5     | Text agent MVP (ReAct)                                     | ✅ complete |
+| 6     | Guardrails (emergency / clinical / PHI)                    | ✅ complete |
+| 7     | Observability (tokens, latency, cost, traces)              | ✅ complete |
+| 8     | FastAPI service                                            | ✅ complete |
+| 9     | Simulation harness                                         | ✅ complete |
+| 10    | Sentinel trust engine (LLM-as-judge)                       | ✅ complete |
+| 11    | Escalation engine (5-signal score + P/R)                   | ✅ complete |
+| 12    | Evaluation framework (metric computation)                  | ✅ complete |
+| 13    | Evaluation harness — locked report contract + trace sidecar | ✅ complete |
+| 14    | Gradio product UI                                          | pending |
+| 15    | Containerization (Dockerfile + docker-compose)             | pending |
+| 16    | Deployment (Hugging Face Gradio Space + alts)              | pending |
+| 17    | Documentation (README, discovery, dev / deploy guides)     | pending |
+| M1    | Module: PMS writeback                                      | pending |
+| M3    | Module: No-show prediction (XGBoost)                       | pending |
+| M5    | Module: Voice layer (faster-whisper + OpenAI TTS)          | pending |
+| later | LangGraph refactor (only after launch)                     | pending |
+| 18    | Production hardening                                       | pending |
+| 19    | v1.0.0 release                                             | pending |
 
 ## Quick start
 
@@ -852,6 +854,75 @@ Phase 12 spec: *"Produce evaluation_report.json."* Met. The
 harness on both shipped customers, builds the report, round-trips
 through JSON, and asserts every spec metric is present and within
 range.
+
+## Evaluation harness (Phase 13 — LOCKED CONTRACT)
+
+Single canonical CLI:
+
+```bash
+poetry run python -m clarion.eval --customer ophthalmology
+poetry run python -m clarion.eval --customer orthopedics --out reports/
+poetry run python -m clarion.eval --customer all
+```
+
+Each invocation runs all 100 personas for the customer through the
+agent, harness, judge, and escalation scorer, then writes **two**
+files to `--out` (default `<CLARION_DATA_DIR>/<customer_id>/`):
+
+| File | Schema | Consumed by |
+|---|---|---|
+| `report_<customer>.json` | `EvaluationReport` (v1.0.0) | Phase 14 Quality + Escalation tabs |
+| `trace_<customer>.json`  | `TraceReport` (v1.0.0)     | Phase 14 Trace Explorer tab |
+
+### Locked report contract
+
+The Phase 13 spec mandates: *"LOCK THE REPORT SCHEMA. Future UIs
+consume this schema. No metric computation inside UI."*
+
+Both wire shapes carry a `schema_version` string (semver). Any
+breaking change — renamed / removed field, narrower domain on an
+existing field, changed semantics — bumps the version and the UI
+keys on it. Additive changes (new optional field, looser bounds)
+keep the version stable.
+
+`REPORT_SCHEMA_VERSION` and `TRACE_SCHEMA_VERSION` constants live in
+`clarion.schemas` so the UI can import them without pulling the
+whole schema module.
+
+### Module layout
+
+```
+clarion/evaluation/
+├── runner.py       # orchestration: load personas, run harness, gather traces
+├── metrics.py      # pure metric computation (containment, booking, etc.)
+├── reporter.py     # HarnessResult + scenarios → EvaluationReport
+├── trace_report.py # HarnessResult + traces.jsonl → TraceReport
+```
+
+The dependency graph is strictly one-way (`runner → reporter → metrics`,
+`runner → trace_report → metrics`). A Phase 14 UI process can import
+`reporter` + `trace_report` and get zero metric internals — the spec's
+"no metric computation inside UI" rule is structurally enforced.
+
+### Metric suite (Phase 13 spec — all 11 in)
+
+| Metric | Source |
+|---|---|
+| Containment Rate | `actual_outcome ∈ {booked, cancelled, info_provided}` / total |
+| Booking Accuracy | booked & passed / scenarios where expected_outcome == "booked" |
+| Hallucination Rate | mean of `judge.hallucination` across scenarios with judge attached |
+| Escalation Precision | Phase 11 `compute_stats` on predicted vs ground_truth `should_escalate` |
+| Escalation Recall | same |
+| Safety Catch Rate | recall on `intent ∈ {emergency, clinical_advice}` |
+| Average Turns | mean `react.step` span count per scenario |
+| Tokens Per Call | (sum `input_tokens` + `output_tokens`) / (sum `llm.complete` count) |
+| Cost Per Call | sum `cost_usd` / scenarios |
+| P50 Latency | 50th-percentile `agent.chat.duration_ms` |
+| P95 Latency | 95th-percentile `agent.chat.duration_ms` |
+
+All eleven appear in `EvaluationMetrics`, broken down per category in
+`by_difficulty` + `by_intent` rollups. The headline strip (6 numbers)
+lives in `EvaluationReport.headline`.
 
 ## Design principles
 
