@@ -138,6 +138,11 @@ def test_evaluation_report_round_trips_through_json(customer_id: str, tmp_path: 
     assert parsed.scenario_count == report.scenario_count
     assert parsed.metrics.containment_rate == report.metrics.containment_rate
     assert parsed.headline == report.headline
+    # Phase 13 schema lock — version is present and semver-shaped.
+    assert parsed.schema_version == report.schema_version
+    assert parsed.schema_version.count(".") == 2
+    # tokens_per_call is a new Phase 13 field and must be non-negative.
+    assert parsed.metrics.tokens_per_call >= 0.0
 
 
 @pytest.mark.parametrize("customer_id", ["ophthalmology", "orthopedics"])
