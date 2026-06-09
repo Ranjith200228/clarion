@@ -15,10 +15,14 @@ from clarion.schemas.escalation import (
     EscalationWeights,
 )
 from clarion.schemas.evaluation import (
+    REPORT_SCHEMA_VERSION,
+    TRACE_SCHEMA_VERSION,
     EvaluationCategoryBreakdown,
     EvaluationMetrics,
     EvaluationReport,
     LatencyStats,
+    TraceEntry,
+    TraceReport,
 )
 from clarion.schemas.judge import (
     JudgeRequest,
@@ -71,6 +75,10 @@ __all__ = [
     "EvaluationCategoryBreakdown",
     "EvaluationMetrics",
     "EvaluationReport",
+    "REPORT_SCHEMA_VERSION",
+    "TRACE_SCHEMA_VERSION",
+    "TraceEntry",
+    "TraceReport",
     "EscalationSignals",
     "EscalationStats",
     "EscalationWeights",

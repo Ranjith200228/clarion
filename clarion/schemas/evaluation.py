@@ -74,6 +74,7 @@ class EvaluationMetrics(BaseModel):
     # Performance.
     avg_turns_to_resolution: float = Field(ge=0.0)
     cost_per_request_usd: float = Field(ge=0.0)
+    tokens_per_call: float = Field(ge=0.0, default=0.0)
     latency_ms: LatencyStats | None = None
 
 
@@ -89,11 +90,26 @@ class EvaluationCategoryBreakdown(BaseModel):
 class EvaluationReport(BaseModel):
     """One customer's full evaluation rollup.
 
-    Written to ``<data_dir>/<customer_id>/evaluation_report.json``;
-    re-read by the Phase 13 dashboard and the Phase 15 release notes.
+    Written to ``<data_dir>/<customer_id>/report_<customer_id>.json``;
+    re-read by the Phase 14 Gradio UI.
+
+    LOCKED CONTRACT
+    ---------------
+    Per the Phase 13 spec: ``schema_version`` keys this file. Any
+    breaking change (renamed / removed field, narrower domain on an
+    existing field, changed semantics) must bump ``REPORT_SCHEMA_VERSION``
+    below. The UI keys on ``schema_version`` so it can reject reports
+    it doesn't know how to read.
+
+    Additive changes (new optional field, looser bounds) keep the
+    version stable. Removal or rename = bump.
     """
 
     model_config = ConfigDict(extra="forbid")
+
+    # Schema lock — the version of the EvaluationReport wire contract
+    # this object conforms to. Bump on any breaking change.
+    schema_version: str = Field(default="1.0.0", pattern=r"^\d+\.\d+\.\d+$")
 
     customer_id: str = Field(min_length=1, pattern=r"^[a-z0-9_-]+$")
     generated_at: datetime
@@ -109,3 +125,67 @@ class EvaluationReport(BaseModel):
 
     # Tiny dict the dashboard top strip renders. Six numbers, by name.
     headline: dict[str, float] = Field(default_factory=dict)
+
+
+# Public constant the runner stamps on every EvaluationReport it builds.
+# Exported here so the Phase 14 UI can compare without importing the
+# entire schema module.
+REPORT_SCHEMA_VERSION = "1.0.0"
+
+
+# ---------- Trace sidecar (Phase 13 spec: trace_<customer>.json) ----------
+
+
+class TraceEntry(BaseModel):
+    """One scenario's worth of trace data, flattened for the UI.
+
+    The Trace Explorer tab in the Phase 14 Gradio app reads a list of
+    these per customer. Every field is denormalized so the UI does
+    zero math: it just renders.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    scenario_id: str
+    customer_id: str
+    trace_id: str
+    difficulty: str
+    intent: str
+
+    # What the agent did.
+    agent_replies: list[str]
+    tools_called: list[str]
+    actual_outcome: str
+    passed: bool
+
+    # Sentinel decisions.
+    escalation_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    escalation_reasons: list[str] = Field(default_factory=list)
+    judge_hallucination: float | None = Field(default=None, ge=0.0, le=1.0)
+    judge_booking_correct: float | None = Field(default=None, ge=0.0, le=1.0)
+    judge_violations: list[str] = Field(default_factory=list)
+
+    # Cost / latency / token totals across the scenario's turns.
+    duration_ms: float | None = Field(default=None, ge=0.0)
+    cost_usd: float | None = Field(default=None, ge=0.0)
+    input_tokens: int = Field(default=0, ge=0)
+    output_tokens: int = Field(default=0, ge=0)
+    step_count: int = Field(default=0, ge=0)
+
+
+class TraceReport(BaseModel):
+    """The sidecar JSON written next to ``report_<customer>.json``.
+
+    Phase 14 Trace Explorer tab reads this and renders each TraceEntry
+    as one row in a table. No business logic; pure render.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = Field(default="1.0.0", pattern=r"^\d+\.\d+\.\d+$")
+    customer_id: str = Field(min_length=1, pattern=r"^[a-z0-9_-]+$")
+    generated_at: datetime
+    entries: list[TraceEntry] = Field(default_factory=list)
+
+
+TRACE_SCHEMA_VERSION = "1.0.0"
