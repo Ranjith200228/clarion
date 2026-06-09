@@ -40,8 +40,7 @@ _FRUSTRATION_PATTERNS: list[re.Pattern[str]] = [
         # Demand for a human.
         r"\b(?:let|put)\s+me\s+(?:speak|talk|through)\s+to\s+(?:a\s+)?"
         r"(?:human|person|manager|supervisor|someone)\b",
-        r"\bput\s+me\s+through\s+to\s+(?:a\s+)?"
-        r"(?:human|person|manager|supervisor|someone)\b",
+        r"\bput\s+me\s+through\s+to\s+(?:a\s+)?" r"(?:human|person|manager|supervisor|someone)\b",
         r"\bi\s+(?:want|need)\s+to\s+(?:speak|talk)\s+to\s+(?:a\s+)?"
         r"(?:human|manager|supervisor|person|someone)\b",
         # Anger / profanity-light markers.
