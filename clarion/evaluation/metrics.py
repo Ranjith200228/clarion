@@ -165,9 +165,7 @@ def _metrics_for(
     ]
     hallucination_with_judge = len(hallucination_vals)
     hallucination_rate = (
-        sum(hallucination_vals) / hallucination_with_judge
-        if hallucination_with_judge
-        else None
+        sum(hallucination_vals) / hallucination_with_judge if hallucination_with_judge else None
     )
 
     # Escalation P/R — predictions from the attached escalation field,
