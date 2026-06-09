@@ -29,6 +29,7 @@ the dashboard (Phase 13) can render the breakdown without re-computing.
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 
@@ -38,9 +39,13 @@ from clarion.schemas import (
     EscalationSignals,
     EscalationStats,
     EscalationWeights,
+    HarnessReport,
     JudgeVerdict,
+    Scenario,
 )
 from clarion.sentinel.frustration import detect_frustration_over_turns
+
+log = logging.getLogger(__name__)
 
 # Heuristic: agent reply pattern that indicates self-doubt when no
 # JudgeVerdict is available to read confidence from.
@@ -99,9 +104,7 @@ class EscalationScorer:
 
     # ---------- signal computation ----------
 
-    def _compute_signals(
-        self, facts: ConversationFacts
-    ) -> tuple[EscalationSignals, list[str]]:
+    def _compute_signals(self, facts: ConversationFacts) -> tuple[EscalationSignals, list[str]]:
         reasons: list[str] = []
 
         low_conf = _low_confidence_signal(facts)
@@ -163,9 +166,50 @@ class EscalationScorer:
 # ---------- precision / recall ----------
 
 
-def compute_stats(
-    predictions: list[bool], ground_truth: list[bool]
+def stats_from_run(
+    scenarios: list[Scenario], report: HarnessReport
 ) -> EscalationStats:
+    """Compute precision/recall for the escalation predictions in
+    ``report`` against the ``should_escalate`` ground-truth in
+    ``scenarios``.
+
+    Convenience over ``compute_stats`` that walks both inputs in order:
+    for each scenario, predict = result.escalation["should_escalate"]
+    and ground_truth = scenario.ground_truth.should_escalate. Results
+    with no escalation field (scorer wasn't run for that scenario) are
+    skipped and a warning is logged.
+
+    Raises ``ValueError`` when the report has results for scenarios that
+    aren't in ``scenarios`` — these two lists must align by scenario_id.
+    """
+    by_id = {s.scenario_id: s for s in scenarios}
+
+    predictions: list[bool] = []
+    truths: list[bool] = []
+    skipped = 0
+    for result in report.results:
+        scenario = by_id.get(result.scenario_id)
+        if scenario is None:
+            raise ValueError(
+                f"HarnessResult {result.scenario_id!r} has no matching "
+                f"scenario in the provided list"
+            )
+        esc = result.escalation
+        if esc is None:
+            skipped += 1
+            continue
+        # ``escalation`` is a dict (model_dump'd at write time on the
+        # HarnessResult) — pull the boolean field.
+        predictions.append(bool(esc["should_escalate"]))
+        truths.append(scenario.ground_truth.should_escalate)
+
+    if skipped:
+        log.warning("stats_from_run: %d/%d results had no escalation", skipped, len(report.results))
+
+    return compute_stats(predictions, truths)
+
+
+def compute_stats(predictions: list[bool], ground_truth: list[bool]) -> EscalationStats:
     """Build an ``EscalationStats`` from aligned ``predicted_escalate``
     + ``ground_truth_escalate`` lists.
 
@@ -180,24 +224,14 @@ def compute_stats(
         )
 
     tp = sum(1 for p, g in zip(predictions, ground_truth, strict=True) if p and g)
-    fp = sum(
-        1 for p, g in zip(predictions, ground_truth, strict=True) if p and not g
-    )
-    fn = sum(
-        1 for p, g in zip(predictions, ground_truth, strict=True) if not p and g
-    )
-    tn = sum(
-        1 for p, g in zip(predictions, ground_truth, strict=True) if not p and not g
-    )
+    fp = sum(1 for p, g in zip(predictions, ground_truth, strict=True) if p and not g)
+    fn = sum(1 for p, g in zip(predictions, ground_truth, strict=True) if not p and g)
+    tn = sum(1 for p, g in zip(predictions, ground_truth, strict=True) if not p and not g)
     total = len(predictions)
 
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-    f1 = (
-        2 * precision * recall / (precision + recall)
-        if (precision + recall) > 0
-        else 0.0
-    )
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
     accuracy = (tp + tn) / total if total > 0 else 0.0
 
     return EscalationStats(
@@ -217,8 +251,14 @@ def compute_stats(
 
 
 def _low_confidence_signal(facts: ConversationFacts) -> float:
-    """Higher when the agent (or judge) sounds unsure."""
-    if facts.judge is not None and facts.judge.confidence > 0:
+    """Higher when the agent (or judge) sounds unsure.
+
+    When a JudgeVerdict is attached, we trust its confidence field —
+    even a confidence of 0.0 is a legitimate "the judge has no
+    confidence" signal that should max out low_confidence. Only when
+    NO judge is attached do we fall back to the reply-text heuristic.
+    """
+    if facts.judge is not None:
         return round(1.0 - facts.judge.confidence, 4)
     if not facts.agent_replies:
         return 0.0
@@ -226,9 +266,7 @@ def _low_confidence_signal(facts: ConversationFacts) -> float:
     return 0.7 if _AGENT_UNSURE_RE.search(last) else 0.0
 
 
-def _repeated_clarification_signal(
-    agent_replies: list[str], max_clarifications: int
-) -> float:
+def _repeated_clarification_signal(agent_replies: list[str], max_clarifications: int) -> float:
     """How close the agent's clarification questions came to (or
     exceeded) the customer's threshold.
 
@@ -255,9 +293,7 @@ def _rule_conflict_signal(verdict: JudgeVerdict | None) -> float:
     return 1.0 if any(v.kind in flagged for v in verdict.policy_violations) else 0.0
 
 
-def _unsupported_request_signal(
-    tools_called: list[str], expected_outcome_is_task: bool
-) -> float:
+def _unsupported_request_signal(tools_called: list[str], expected_outcome_is_task: bool) -> float:
     """1.0 when the agent had to file a PMS task to handle the request,
     UNLESS the scenario's ground truth says a task IS the expected
     outcome (e.g. orthopedics cancel). Filing a task is expected for
