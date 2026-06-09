@@ -16,12 +16,15 @@ from clarion.evaluation.metrics import (
 )
 from clarion.evaluation.reporter import build_report, write_report
 from clarion.evaluation.runner import run_evaluation
+from clarion.evaluation.trace_report import build_trace_report, write_trace_report
 
 __all__ = [
     "build_report",
+    "build_trace_report",
     "compute_evaluation_metrics",
     "compute_metric_subset",
     "load_trace_summaries",
     "run_evaluation",
     "write_report",
+    "write_trace_report",
 ]
