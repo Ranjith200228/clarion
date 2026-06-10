@@ -21,6 +21,17 @@ openai = "^1.40"        # optional embedder (text-embedding-3-small)
 fastapi = "^0.115"
 uvicorn = { extras = ["standard"], version = "^0.30" }
 
+[tool.poetry.group.ui.dependencies]
+# Phase 14 — Gradio product UI. Kept in its own optional group so the
+# core library doesn't drag in Gradio's transitive deps (fastapi,
+# uvicorn, websockets, pydub, etc — many of which we already pin).
+gradio = "^4.44"
+# gradio 4.44 still imports the legacy ``HfFolder`` from huggingface_hub,
+# which was removed in huggingface_hub 1.0. Pin to the last compatible
+# 0.x release so the import line in gradio/oauth.py works.
+huggingface-hub = ">=0.24,<0.27"
+httpx = "^0.27"  # for the Gradio app's FastAPI backend client
+
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.6"
 pytest = "^8.2"
