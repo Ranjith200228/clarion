@@ -1,0 +1,76 @@
+%% Clarion — high-level architecture
+%% Render with: mmdc -i docs/architecture.mmd -o docs/architecture.svg
+%% (or use GitHub's inline Mermaid renderer)
+
+flowchart TB
+    subgraph CONFIG["Configuration"]
+        Y1["configs/ophthalmology.yaml"]
+        Y2["configs/orthopedics.yaml"]
+    end
+
+    subgraph DATA["Data pipelines"]
+        SEED["data/seeds/*.json"]
+        RULES["data/rules/<customer>/*.md"]
+        SQL[("structured.sqlite\nproviders / slots /\nappointments / eligibility")]
+        FAISS[("rules.faiss\n+ rules_meta.json")]
+        SEED --> SQL
+        RULES --> FAISS
+    end
+
+    subgraph AGENT["Agent (ReAct loop)"]
+        LLM["LLM (gpt-4o-mini /\nFakeLLM in CI)"]
+        TOOLS["Tools\nsearch_slots / book_appointment /\ncancel / check_eligibility / create_pms_task"]
+        LLM <--> TOOLS
+        LLM <--> FAISS
+        TOOLS <--> SQL
+    end
+
+    subgraph SENTINEL["Sentinel trust engine"]
+        GUARD["Guardrails\nemergency + clinical advice + PHI"]
+        JUDGE["LLM-as-Judge\nbooking + hallucination + policy"]
+        ESC["Escalation scorer\n5 signals -> 0-1"]
+    end
+
+    subgraph OBS["Observability"]
+        TRACES["traces.jsonl\nspans + tokens + cost"]
+        AUDIT["audit.jsonl\nPHI-redacted"]
+    end
+
+    USER["Patient / caller"] -->|/chat| API["FastAPI service\n/chat /evaluate /health"]
+    API --> AGENT
+    AGENT --> SENTINEL
+    AGENT --> OBS
+    Y1 -.->|loaded| AGENT
+    Y2 -.->|loaded| AGENT
+
+    HARNESS["Simulation harness\n100 personas/customer"]
+    HARNESS --> AGENT
+
+    EVAL["Evaluation harness\nclarion.eval --customer X"]
+    EVAL --> HARNESS
+    EVAL --> JUDGE
+    EVAL --> ESC
+    EVAL --> TRACES
+
+    EVAL -->|writes| REPORT["report_<customer>.json"]
+    EVAL -->|writes| TRACE["trace_<customer>.json"]
+
+    UI["Gradio Blocks UI\nLive Agent / Quality /\nEscalations / Trace Explorer"]
+    UI -->|reads| REPORT
+    UI -->|reads| TRACE
+    UI -->|HTTP| API
+
+    DEPLOY["Deployment targets\nHF Spaces / Cloud Run /\nRender / Fly.io"]
+    DEPLOY -.->|hosts| API
+    DEPLOY -.->|hosts| UI
+
+    classDef config fill:#fef9c3,stroke:#92400e
+    classDef data fill:#e0f2fe,stroke:#0c4a6e
+    classDef agent fill:#e0e7ff,stroke:#312e81
+    classDef sentinel fill:#fee2e2,stroke:#7f1d1d
+    classDef obs fill:#f3e8ff,stroke:#581c87
+    class CONFIG,Y1,Y2 config
+    class DATA,SEED,RULES,SQL,FAISS data
+    class AGENT,LLM,TOOLS agent
+    class SENTINEL,GUARD,JUDGE,ESC sentinel
+    class OBS,TRACES,AUDIT obs
