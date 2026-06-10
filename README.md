@@ -44,7 +44,7 @@ escalation recall >= 0.9, safety catch == 1.0.
 | 12    | Evaluation framework (metric computation)                  | ✅ complete |
 | 13    | Evaluation harness — locked report contract + trace sidecar | ✅ complete |
 | 14    | Gradio product UI (4 tabs + customer switcher)             | ✅ complete |
-| 15    | Containerization (Dockerfile + docker-compose)             | pending |
+| 15    | Containerization (Dockerfile + docker-compose)             | ✅ complete |
 | 16    | Deployment (Hugging Face Gradio Space + alts)              | pending |
 | 17    | Documentation (README, discovery, dev / deploy guides)     | pending |
 | M1    | Module: PMS writeback                                      | pending |
@@ -982,6 +982,83 @@ either reloads all four tabs and resets the Live Agent running totals.
 - each tab's `render(...)` helper returns the expected shape against a
   synthetic report
 - `set_customer` resets the Live Agent running totals
+
+## Containers (Phase 15)
+
+The repo ships a production-grade multi-stage Dockerfile + a
+`docker-compose.yml` that runs FastAPI and Gradio side-by-side.
+
+```bash
+# Smoke check the Dockerfile / compose / .dockerignore shape (no
+# Docker daemon required) — runs as part of the regular pytest suite.
+poetry run pytest tests/docker/ -q
+
+# Build the runtime image once.
+docker compose build
+
+# Start API (port 8000) + Gradio (port 7860).
+docker compose up
+#   gradio waits for ``service_healthy`` on api before starting.
+#   open http://localhost:7860 for the UI
+#   open http://localhost:8000/docs for the API Swagger.
+
+# Run the full test suite inside the container — Phase 15 acceptance
+# "tests pass inside container":
+docker build --target test -t clarion:test .
+```
+
+Environment variables interpolated by compose (set in a sibling
+`.env`, `.env.example` is committed):
+
+| Var | Used by | Notes |
+|---|---|---|
+| `OPENAI_API_KEY` | api, gradio | Required for live LLM. Scripted mode works without it. |
+| `CLARION_MODEL` | api | Defaults to `gpt-4o-mini`. |
+| `CLARION_SKIP_AUTOAPP` | api | Set to `1` to skip the module-level FastAPI singleton (CI). |
+
+### Image architecture
+
+```
+┌─ builder ───────────────────────────────┐
+│ python:3.11-slim + poetry 1.8.3         │
+│ poetry install --with ui                │
+│ COPY source                             │
+│ scripts/build_indices.sh                │
+│ poetry install --only-root              │
+└───────────────┬─────────────────────────┘
+                │
+   ┌────────────┴────────────┐
+   │                         │
+   ▼                         ▼
+┌─ test ──────────┐  ┌─ runtime ────────────────────┐
+│ + dev deps      │  │ python:3.11-slim             │
+│ pytest -q       │  │ COPY --from=builder /app     │
+│ (build gate)    │  │ USER clarion (UID 1000)      │
+└─────────────────┘  │ tini PID 1                   │
+                     │ EXPOSE 8000 7860             │
+                     │ HEALTHCHECK /health          │
+                     └──────────────────────────────┘
+```
+
+- **Non-root execution**: `clarion` user, UID 1000 (HF Spaces, Cloud
+  Run, Render, Fly.io all tolerate this).
+- **Tini as PID 1** so SIGTERM propagates cleanly into the Python
+  process on container shutdown.
+- **Pre-baked FAISS + SQLite** for both customers — `scripts/build_indices.sh`
+  runs during the builder stage, so the runtime image starts ready.
+- **Health checks** point at `/health` (api) and `/` (gradio) via
+  `scripts/healthcheck.sh`, called every 30s with a 20s grace period.
+- **`.dockerignore`** keeps the build context ~10MB by excluding
+  `.git/`, `.venv/`, cache dirs, generated per-customer artifacts, and
+  local `.env`.
+
+### Structural test coverage
+
+`tests/docker/` parses the artifacts as YAML / text and asserts the
+Phase 15 spec invariants without needing a Docker daemon. These tests
+run in the standard `pytest` suite and catch regressions to the
+Dockerfile / compose / dockerignore shape before they reach a real
+deploy.
 
 ## Design principles
 
