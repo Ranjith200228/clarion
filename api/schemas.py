@@ -24,6 +24,24 @@ class ChatRequest(BaseModel):
     conversation_id: str | None = Field(default=None, min_length=1)
 
 
+class LastTurnMetrics(BaseModel):
+    """Per-turn metrics surfaced by ``/chat``.
+
+    Used by the Phase 14 Gradio Live Agent tab to render the running
+    escalation score, last tool call, and cumulative cost without
+    re-reading the trace file. Every field is optional so a guardrail
+    short-circuit turn (no LLM call) still parses.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    escalation_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    last_tool_call: str | None = None
+    input_tokens: int = Field(default=0, ge=0)
+    output_tokens: int = Field(default=0, ge=0)
+    cost_usd: float = Field(default=0.0, ge=0.0)
+
+
 class ChatResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -31,6 +49,7 @@ class ChatResponse(BaseModel):
     conversation_id: str
     trace_id: str
     reply: str
+    last_turn_metrics: LastTurnMetrics | None = None
 
 
 # ---------- /evaluate ----------

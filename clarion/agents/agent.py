@@ -30,6 +30,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from clarion.agents.llm import LLMClient, Message
 from clarion.agents.prompt import PromptContext, build_system_prompt
@@ -101,6 +102,12 @@ class Agent:
     # echo it back to the client without re-reading any file.
     last_trace_id: str = ""
 
+    # Last completed turn's spans, kept in memory for one cycle so the
+    # API layer can build LastTurnMetrics without a file read. List of
+    # the Tracer's spans after the with-block closes; overwritten on
+    # every chat() call. None before the first call.
+    _last_turn_spans: list[Any] | None = None
+
     # ---------- public entry points ----------
 
     def chat(self, user_message: str) -> str:
@@ -115,6 +122,9 @@ class Agent:
             root.set("reply_chars", len(reply))
         if self.traces is not None:
             self.traces.write(tracer.emit())
+        # Capture the just-closed span list. ``Tracer.emit().spans`` is
+        # already a snapshot (list of Span objects), safe to retain.
+        self._last_turn_spans = list(tracer.emit().spans)
         return reply
 
     def _chat_inner(self, user_message: str, tracer: Tracer) -> str:
