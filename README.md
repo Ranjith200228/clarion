@@ -45,7 +45,7 @@ escalation recall >= 0.9, safety catch == 1.0.
 | 13    | Evaluation harness — locked report contract + trace sidecar | ✅ complete |
 | 14    | Gradio product UI (4 tabs + customer switcher)             | ✅ complete |
 | 15    | Containerization (Dockerfile + docker-compose)             | ✅ complete |
-| 16    | Deployment (Hugging Face Gradio Space + alts)              | pending |
+| 16    | Deployment (Hugging Face Gradio Space + alts)              | ✅ complete |
 | 17    | Documentation (README, discovery, dev / deploy guides)     | pending |
 | M1    | Module: PMS writeback                                      | pending |
 | M3    | Module: No-show prediction (XGBoost)                       | pending |
@@ -1059,6 +1059,74 @@ Phase 15 spec invariants without needing a Docker daemon. These tests
 run in the standard `pytest` suite and catch regressions to the
 Dockerfile / compose / dockerignore shape before they reach a real
 deploy.
+
+## Deployment (Phase 16)
+
+The Phase 15 container image works unchanged on four targets. All
+deploy steps live in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+| Target | Manifest | When to use |
+|---|---|---|
+| **Hugging Face Gradio Space** (primary) | [`huggingface/README.md`](huggingface/README.md) | Public demo for portfolios / recruiters. Free cpu-basic tier. |
+| Cloud Run | [`deploy/cloudrun.yaml`](deploy/cloudrun.yaml) | Production auto-scaling, pay-per-request |
+| Render | [`deploy/render.yaml`](deploy/render.yaml) | One-click Blueprint deploy |
+| Fly.io | [`deploy/fly.toml`](deploy/fly.toml) | Multi-region, scale-to-zero |
+
+### What runs on each target
+
+A single Docker container with `scripts/serve_all.sh` as the CMD:
+
+```
+container
+  └─ scripts/serve_all.sh
+       ├─ python -m api.app       (FastAPI on 127.0.0.1:8000)
+       └─ python -m gradio_app    (Gradio on 0.0.0.0:7860)
+```
+
+The Gradio Live Agent tab calls FastAPI over container loopback. From
+the outside world only port 7860 is exposed — the same `app_port` HF
+Spaces expects, which keeps every target's networking identical.
+
+### Secrets — set per target
+
+`OPENAI_API_KEY` is the only secret. Each target has its own mechanism:
+
+- **HF Spaces**: Space Settings → Variables and secrets → add as a
+  secret named `OPENAI_API_KEY`
+- **Cloud Run**: Secret Manager entry referenced via `valueFrom.secretKeyRef`
+- **Render**: env var with `sync: false` so the value lives in the
+  dashboard, not in `deploy/render.yaml`
+- **Fly.io**: `fly secrets set OPENAI_API_KEY=sk-...`
+
+`tests/docker/test_deployment.py` asserts each manifest uses the
+target's secret mechanism rather than hardcoding the value.
+
+### Pre-built RAG + demo data — no manual build at deploy time
+
+The Phase 15 `builder` stage runs `scripts/build_indices.sh` and bakes
+both customers' FAISS indices + SQLite stores into the image. The
+synthetic seeds + personas + rules ship in `data/` and copy into the
+runtime image as-is. Operators don't run any ingest commands during
+deploy; the first `/chat` request lands on a fully warm pipeline.
+
+### `requirements.txt` for non-Poetry platforms
+
+A pinned `requirements.txt` (generated via `poetry export --with ui`)
+exists at the repo root. Targets that don't speak Poetry (Render's
+Python service template, some Spaces variants) can fall back to it.
+The canonical install path for Docker builds remains Poetry.
+
+### Verification
+
+```bash
+# Structural tests — no Docker / cloud daemon required
+poetry run pytest tests/docker/ -q
+
+# Local smoke (Phase 15 acceptance)
+docker compose build
+docker compose up
+docker build --target test -t clarion:test .
+```
 
 ## Design principles
 
