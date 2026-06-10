@@ -1,0 +1,41 @@
+# deploy/render.yaml
+#
+# Render.com Blueprint for the Clarion single-process bundle.
+#
+# Deploy via Render Dashboard → Blueprints → New Blueprint, pointing at
+# this repo. Render reads this file at the repo root and provisions the
+# service. Set OPENAI_API_KEY as a sync: false env var in the dashboard
+# so it doesn't end up in the repo.
+
+services:
+  - type: web
+    name: clarion
+    runtime: docker
+    plan: starter         # 0.5 CPU / 512 MB. Upgrade to standard for heavier loads.
+    region: oregon
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # Render maps PORT env var to the public port. Our Dockerfile uses
+    # 7860, so we tell Render to bind it explicitly.
+    envVars:
+      - key: PORT
+        value: "7860"
+      - key: GRADIO_HOST
+        value: "0.0.0.0"
+      - key: GRADIO_PORT
+        value: "7860"
+      - key: CLARION_DATA_DIR
+        value: /app/data
+      - key: CLARION_CONFIG_DIR
+        value: /app/configs
+      - key: CLARION_API_HOST
+        value: "127.0.0.1"
+      - key: CLARION_API_PORT
+        value: "8000"
+      - key: OPENAI_API_KEY
+        sync: false        # set in the Render dashboard; not in git
+      - key: CLARION_MODEL
+        value: gpt-4o-mini
+    healthCheckPath: /
+    autoDeploy: true       # redeploy on push to main
