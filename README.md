@@ -43,7 +43,7 @@ escalation recall >= 0.9, safety catch == 1.0.
 | 11    | Escalation engine (5-signal score + P/R)                   | ✅ complete |
 | 12    | Evaluation framework (metric computation)                  | ✅ complete |
 | 13    | Evaluation harness — locked report contract + trace sidecar | ✅ complete |
-| 14    | Gradio product UI                                          | pending |
+| 14    | Gradio product UI (4 tabs + customer switcher)             | ✅ complete |
 | 15    | Containerization (Dockerfile + docker-compose)             | pending |
 | 16    | Deployment (Hugging Face Gradio Space + alts)              | pending |
 | 17    | Documentation (README, discovery, dev / deploy guides)     | pending |
@@ -923,6 +923,65 @@ The dependency graph is strictly one-way (`runner → reporter → metrics`,
 All eleven appear in `EvaluationMetrics`, broken down per category in
 `by_difficulty` + `by_intent` rollups. The headline strip (6 numbers)
 lives in `EvaluationReport.headline`.
+
+## Gradio product UI (Phase 14)
+
+A `gr.Blocks` app at `gradio_app/` with four tabs and a customer
+switcher. Reads the locked Phase 13 JSON contracts. **Zero metric
+computation in the UI** — every number is a direct field read.
+
+### Run locally
+
+Two processes:
+
+```bash
+# Terminal 1 — FastAPI backend
+poetry install --with ui
+poetry run python -m api.app
+
+# Terminal 2 — Gradio UI
+poetry run python -m gradio_app
+# Open http://localhost:7860
+```
+
+The Gradio app finds the FastAPI backend via `CLARION_API_URL`
+(default `http://localhost:8000`) and the JSON files via
+`CLARION_DATA_DIR` (default `data/`).
+
+### Tabs (spec order)
+
+| Tab | Renders | Data source |
+|---|---|---|
+| **Live Agent** | `gr.ChatInterface` + per-turn escalation score, last tool call, running cost | FastAPI `/chat` (via `httpx`) |
+| **Quality Metrics** | Containment rate, booking accuracy, hallucination rate, escalation recall, average turns, cost per call, outcome distribution | `report_<customer>.json` |
+| **Escalations** | Reason frequency, escalated calls, threshold analysis (P/R/F1/accuracy at current cutoff) | `report_<customer>.json` |
+| **Trace Explorer** | One row per scenario: agent replies, tools, tokens, latency, cost, escalation, judge verdict | `trace_<customer>.json` |
+
+Customer switcher (top): **Ophthalmology** / **Orthopedics** — selecting
+either reloads all four tabs and resets the Live Agent running totals.
+
+### Architecture invariants
+
+- **`gradio_app/` never imports `clarion.evaluation.metrics`.** The dep
+  graph is `gradio_app → clarion.schemas` only. The spec's "no metric
+  computation inside UI" rule is structurally enforced.
+- **`gradio_app/` never imports `clarion.agents`.** The Live Agent tab
+  calls FastAPI over HTTP. The agent runtime stays in the API process.
+- **Schema lock is enforced at load time.** `data.py` checks each file's
+  `schema_version` against `REPORT_SCHEMA_VERSION` / `TRACE_SCHEMA_VERSION`
+  and raises `SchemaVersionMismatchError` on a mismatch — no silent
+  field misinterpretation.
+
+### Tests
+
+15 tests under `tests/gradio_app/` cover:
+
+- typed loader round-trips (`load_report`, `load_trace_report`, `load_artifacts`)
+- missing-file path produces the `python -m clarion.eval` recovery hint
+- schema_version mismatch raises (the LOCK)
+- each tab's `render(...)` helper returns the expected shape against a
+  synthetic report
+- `set_customer` resets the Live Agent running totals
 
 ## Design principles
 
