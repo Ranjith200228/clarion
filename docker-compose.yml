@@ -1,0 +1,74 @@
+# Phase 15 — docker-compose.yml
+#
+# Brings up the two production services side-by-side. Both share the
+# same Clarion image (built once); they differ only in command + port
+# + healthcheck.
+#
+#   docker compose build       — builds the runtime image once
+#   docker compose up          — starts api + gradio
+#   docker compose up -d       — same, detached
+#   docker compose down        — stops + removes
+#   docker compose logs -f api — follow logs
+#
+# To run the in-container test suite (Phase 15 acceptance):
+#   docker build --target test -t clarion:test .
+#
+# Local secrets go in a sibling .env file (gitignored; .env.example
+# is committed). At minimum set OPENAI_API_KEY for live LLM flows;
+# the agent and CI both run without it in scripted mode.
+
+services:
+  api:
+    build:
+      context: .
+      target: runtime
+    image: clarion:latest
+    container_name: clarion-api
+    command: ["python", "-m", "api.app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    environment:
+      # Per-customer config + data live under /app inside the image.
+      CLARION_DATA_DIR: /app/data
+      CLARION_CONFIG_DIR: /app/configs
+      # Pulled from the .env file at compose time. Empty in dev / CI.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CLARION_MODEL: ${CLARION_MODEL:-gpt-4o-mini}
+      # Disable the module-level auto-app singleton when no key is set
+      # so the container doesn't crash on first import.
+      CLARION_SKIP_AUTOAPP: ${CLARION_SKIP_AUTOAPP:-}
+    healthcheck:
+      test: ["CMD", "bash", "scripts/healthcheck.sh", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  gradio:
+    build:
+      context: .
+      target: runtime
+    image: clarion:latest
+    container_name: clarion-gradio
+    command: ["python", "-m", "gradio_app"]
+    ports:
+      - "7860:7860"
+    environment:
+      # Reach the FastAPI service over compose's internal DNS.
+      CLARION_API_URL: http://api:8000
+      CLARION_DATA_DIR: /app/data
+      CLARION_CONFIG_DIR: /app/configs
+      GRADIO_HOST: 0.0.0.0
+      GRADIO_PORT: 7860
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "scripts/healthcheck.sh", "http://localhost:7860/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
