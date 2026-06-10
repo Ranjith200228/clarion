@@ -73,6 +73,9 @@ def build_report(
         by_difficulty=by_difficulty,
         by_intent=by_intent,
         headline=_headline(overall),
+        outcome_distribution=_outcome_distribution(report),
+        escalation_reason_frequency=_escalation_reason_frequency(report),
+        escalated_scenario_ids=_escalated_scenario_ids(report),
     )
 
 
@@ -111,3 +114,47 @@ def category_counts(report: HarnessReport) -> dict[str, Counter[str]]:
         "difficulty": Counter(r.difficulty for r in report.results),
         "intent": Counter(r.intent for r in report.results),
     }
+
+
+# ---------- Phase 14 UI-feed pre-aggregates ----------
+
+
+def _outcome_distribution(report: HarnessReport) -> dict[str, int]:
+    """Count of each actual_outcome label across all results.
+
+    The Phase 14 Quality tab renders this as the outcome breakdown bar.
+    Sorted so JSON output is deterministic between runs.
+    """
+    counts = Counter(r.actual_outcome for r in report.results)
+    return dict(sorted(counts.items()))
+
+
+def _escalation_reason_frequency(report: HarnessReport) -> dict[str, int]:
+    """Frequency of each escalation reason label across results that
+    actually fired one. Pulled from ``result.escalation['reasons']``.
+
+    A reason label looks like ``"low_confidence=0.80"`` or
+    ``"frustration=0.62"``; the histogram strips the score suffix so the
+    bins are stable across runs. Sorted for deterministic output.
+    """
+    counts: Counter[str] = Counter()
+    for r in report.results:
+        escalation = r.escalation
+        if not isinstance(escalation, dict):
+            continue
+        for label in escalation.get("reasons") or []:
+            # "low_confidence=0.80" -> "low_confidence"
+            key = str(label).split("=", 1)[0].strip()
+            if key:
+                counts[key] += 1
+    return dict(sorted(counts.items()))
+
+
+def _escalated_scenario_ids(report: HarnessReport) -> list[str]:
+    """Ordered scenario_ids whose escalation.should_escalate is True."""
+    out: list[str] = []
+    for r in report.results:
+        escalation = r.escalation
+        if isinstance(escalation, dict) and bool(escalation.get("should_escalate")):
+            out.append(r.scenario_id)
+    return out
