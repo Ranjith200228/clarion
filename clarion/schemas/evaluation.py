@@ -126,6 +126,25 @@ class EvaluationReport(BaseModel):
     # Tiny dict the dashboard top strip renders. Six numbers, by name.
     headline: dict[str, float] = Field(default_factory=dict)
 
+    # Pre-aggregated UI feeds (Phase 14 additive, schema stays at 1.0.0).
+    # These are NOT metrics — they are denormalized counts the Quality
+    # and Escalation tabs render directly. Phase 14 spec rule:
+    # "No metric computation inside UI."
+
+    # outcome_distribution: actual_outcome -> count across all scenarios.
+    # Renders as the Quality tab's outcome breakdown bar.
+    outcome_distribution: dict[str, int] = Field(default_factory=dict)
+
+    # escalation_reason_frequency: reason_label -> count across all
+    # results where the scorer fired at least one reason. Renders as
+    # the Escalations tab's reason histogram.
+    escalation_reason_frequency: dict[str, int] = Field(default_factory=dict)
+
+    # escalated_scenario_ids: ordered list of scenario_ids whose
+    # escalation.should_escalate was True. Renders as the Escalations
+    # tab's "Escalated Calls" list (count + drilldown ids).
+    escalated_scenario_ids: list[str] = Field(default_factory=list)
+
 
 # Public constant the runner stamps on every EvaluationReport it builds.
 # Exported here so the Phase 14 UI can compare without importing the
