@@ -112,10 +112,12 @@ USER clarion
 
 EXPOSE 8000 7860
 
-# The two compose services override this CMD with their respective
-# entry points; this default makes ``docker run clarion`` give a friendly
-# usage hint instead of failing silently.
-CMD ["python", "-c", "import sys; sys.stderr.write('Specify a command: \\n  api    -> python -m api.app\\n  gradio -> python -m gradio_app\\n  test   -> python -m pytest -q\\nSee docker-compose.yml for both services.\\n')"]
+# Default CMD: serve_all.sh starts FastAPI on 127.0.0.1:8000 and Gradio
+# on 0.0.0.0:7860 inside this single container. This is what HF Spaces
+# (Phase 16 primary target) and any single-service deployer want out
+# of the box. The Phase 15 docker-compose.yml overrides CMD per service
+# so the two-container local-dev flow is unaffected.
+CMD ["bash", "scripts/serve_all.sh"]
 
 # Tini as PID 1 reaps zombies + forwards SIGTERM so Cloud Run / HF
 # Spaces shut us down cleanly.
