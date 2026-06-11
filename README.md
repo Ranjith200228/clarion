@@ -314,7 +314,7 @@ per customer:
 # configs/ophthalmology.yaml
 modules:
   pms_writeback: true       # M1: shipped
-  no_show_prediction: false # M3: pending
+  no_show_prediction: true  # M3: shipped
   voice: false              # M5: pending
 ```
 
@@ -357,14 +357,76 @@ extraction quality, not redaction strictness.
 key required. A future `LLMExtractor` can be dropped in without
 touching the writer or the accuracy metric.
 
+### M3: No-Show Prediction
+
+XGBoost classifier that scores each booked appointment with a no-show
+probability and a `low` / `medium` / `high` risk band. The front desk
+can sort the day's schedule by `p_no_show` and work the top decile
+first.
+
+**Pipeline.**
+
+```
+generate_dataset(seed) -> Dataset       # synthetic, 7 features, 24 post-one-hot cols
+       │
+       ▼
+train(dataset, seed)  -> TrainResult    # 5-fold CV scoring + final fit on full data
+       │
+       ▼
+persist(result, path) -> model.joblib   # booster + NoShowModelMetadata bundle
+       │
+       ▼
+NoShowPredictor.load(path)
+       │
+       ▼
+predict_one(features) -> NoShowPrediction (schema v1.0.0)
+```
+
+**Synthetic dataset.** We never train on real PHI — the trainer
+consumes 2,000 rows from a generator that mirrors what a real PMS
+exposes: `lead_time_days`, `prior_no_show_rate`, `is_new_patient`,
+`day_of_week`, `payer`, `age_band`, `appointment_type`. The label is
+a deterministic logit (dominated by `prior_no_show_rate`) plus
+gaussian noise sized so a perfectly calibrated learner tops out
+around the realistic 0.65-0.75 ROC-AUC range published in real
+no-show studies.
+
+**Metrics.** Two new optional fields on
+`EvaluationReport.metrics`, both null when the module is disabled:
+
+- `no_show_roc_auc` — held-out ROC-AUC on a fresh 500-row synthetic
+  test set scored through the persisted booster. The held-out seed
+  differs from the training seed so this is a real out-of-fold
+  measurement, not a re-roll of training data.
+- `no_show_top_decile_lift` — positive rate among the top-10% scored
+  cohort divided by the base rate. Lift > 1.0 means the front desk
+  catches more no-shows by working the top decile than by calling
+  everyone uniformly.
+
+`schema_version` stays `1.0.0` — additive optional fields don't
+break the locked report contract.
+
+**Drift guard.** `NoShowPredictor.__init__` compares the persisted
+bundle's `feature_columns` against the dataset module's current
+`FEATURE_COLUMNS` tuple at load time. A mismatch means the feature
+layout moved underneath a stale model — we refuse to score rather
+than silently align rows to the wrong columns. That's the worst
+class of ML bug (looks right, is wrong); better to fail loud.
+
+**Artifact path.** The reporter expects the persisted bundle at
+`<data_dir>/<customer_id>/no_show_prediction/model.joblib`. Bumping
+the trainer's `MODEL_VERSION` ("no_show_v1" today) is the audit
+handle — every `NoShowPrediction` stamps it so production
+predictions trace back to a specific trained bundle.
+
 ## 12. Future roadmap
 
 Post-launch modules, prioritized:
 
 | Module | Status | Spec |
 |---|---|---|
-| **M1: PMS Writeback** | Pending | Convert conversations to structured `summary.json` + `task.json`; field extraction accuracy metric |
-| **M3: No-Show Prediction** | Pending | XGBoost on booking features; ROC-AUC + lift; high-risk bookings trigger reminder recommendations |
+| **M1: PMS Writeback** | ✅ shipped | Convert conversations to structured `summary.json` + `task.json`; field extraction accuracy metric |
+| **M3: No-Show Prediction** | ✅ shipped | XGBoost on booking features; held-out ROC-AUC + top-decile lift folded into the report |
 | **M5: Voice Layer** | Pending | faster-whisper STT + OpenAI TTS; speech → STT → Clarion → TTS; reuses the entire existing engine |
 | **LangGraph refactor** | Deferred | Hierarchical router → specialist → supervisor agents. Only after launch per spec. |
 | **Phase 18: Production hardening** | Pending | Retries, caching, rate limiting, circuit breakers, structured logging, load testing, security review |
