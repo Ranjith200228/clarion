@@ -1,5 +1,10 @@
 # Deploying Clarion
 
+> Cross-references: [`developer_guide.md`](./developer_guide.md) for local
+> setup · [`discovery.md`](./discovery.md) for FDE onboarding ·
+> [`../README.md`](../README.md) for architecture overview ·
+> [`architecture.png`](./architecture.png) for the visual diagram.
+
 Phase 16 ships one container image that runs unchanged on four targets:
 
 | Target | When to use | Cost |
