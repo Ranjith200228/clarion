@@ -304,6 +304,59 @@ files, CI matrix on Python 3.11 + 3.12.
 
 ---
 
+## Modules (post-launch)
+
+Per the spec rule "Modules must remain isolated. No hard coupling." —
+every post-launch module sits in `clarion/modules/<name>/` and is opt-in
+per customer:
+
+```yaml
+# configs/ophthalmology.yaml
+modules:
+  pms_writeback: true       # M1: shipped
+  no_show_prediction: false # M3: pending
+  voice: false              # M5: pending
+```
+
+The agent never imports modules; modules read completed transcripts and
+write side-effect artifacts.
+
+### M1: PMS Writeback
+
+Convert each completed conversation into two structured JSON files for
+downstream practice-management systems:
+
+```
+<data_dir>/<customer_id>/pms_writeback/<conversation_id>/
+    summary.json   — ConversationSummary (schema v1.0.0)
+    task.json      — PmsTaskWriteback   (schema v1.0.0)
+```
+
+`summary.json` carries patient_id, caller_name, intent, appointment
+type/time, payer, outcome, escalated flag, notes, and a redacted
+transcript preview. `task.json` carries the matching front-desk
+task (subject + body + priority + assignee_group), cross-linked back
+via `summary_ref: "summary.json"`.
+
+**PHI redaction at the writer boundary.** Every string value runs
+through `clarion.sentinel.phi.redact` before serialization — phones,
+emails, SSNs, member ids, and synthetic patient ids never reach disk
+in the writeback artifacts.
+
+**Field extraction accuracy** is a new optional metric on
+`EvaluationReport.metrics.field_extraction_accuracy` (null when the
+module isn't enabled). The scorer compares four extracted fields
+(`patient_id`, `appointment_type`, `outcome`, `intent`) against
+scenario ground truth across the full 100-scenario run. The redaction
+tag `<PATIENT_ID>` is recognized as a positive match — we measure
+extraction quality, not redaction strictness.
+
+**Extractor architecture.** An `Extractor` Protocol with one method
+(`extract(ctx) -> ConversationSummary`). The shipped
+`HeuristicExtractor` is deterministic regex + keyword based, no LLM
+key required. A future `LLMExtractor` can be dropped in without
+touching the writer or the accuracy metric.
+
 ## 12. Future roadmap
 
 Post-launch modules, prioritized:
