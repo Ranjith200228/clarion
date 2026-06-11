@@ -18,9 +18,15 @@ from clarion.modules.pms_writeback.extractor import (
     Extractor,
     HeuristicExtractor,
 )
+from clarion.modules.pms_writeback.writer import (
+    PmsWritebackWriter,
+    WritebackOutcome,
+)
 
 __all__ = [
     "ExtractionContext",
     "Extractor",
     "HeuristicExtractor",
+    "PmsWritebackWriter",
+    "WritebackOutcome",
 ]
