@@ -26,6 +26,12 @@ from clarion.modules.no_show_prediction.dataset import (
     encode_row,
     generate_dataset,
 )
+from clarion.modules.no_show_prediction.predictor import (
+    RISK_BAND_HIGH_THRESHOLD,
+    RISK_BAND_MEDIUM_THRESHOLD,
+    NoShowPredictor,
+    risk_band_for,
+)
 from clarion.modules.no_show_prediction.trainer import (
     MODEL_VERSION,
     TrainResult,
@@ -41,10 +47,14 @@ __all__ = [
     "FEATURE_COLUMNS",
     "MODEL_VERSION",
     "NUMERIC_FEATURES",
+    "NoShowPredictor",
     "PAYERS",
+    "RISK_BAND_HIGH_THRESHOLD",
+    "RISK_BAND_MEDIUM_THRESHOLD",
     "TrainResult",
     "encode_row",
     "generate_dataset",
     "persist",
+    "risk_band_for",
     "train",
 ]
