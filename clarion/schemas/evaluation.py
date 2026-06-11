@@ -77,6 +77,11 @@ class EvaluationMetrics(BaseModel):
     tokens_per_call: float = Field(ge=0.0, default=0.0)
     latency_ms: LatencyStats | None = None
 
+    # Module M1 (PMS Writeback) — fraction of extractor-produced fields
+    # that match scenario ground truth. None when the module is
+    # disabled for the customer.
+    field_extraction_accuracy: float | None = Field(default=None, ge=0.0, le=1.0)
+
 
 class EvaluationCategoryBreakdown(BaseModel):
     """Per-category metrics ready for the by_difficulty / by_intent dicts."""

@@ -13,6 +13,10 @@ Public surface:
   Extractor          — Protocol that future LLM-backed extractors satisfy
 """
 
+from clarion.modules.pms_writeback.accuracy import (
+    FieldAccuracyResult,
+    compute_field_extraction_accuracy,
+)
 from clarion.modules.pms_writeback.extractor import (
     ExtractionContext,
     Extractor,
@@ -26,7 +30,9 @@ from clarion.modules.pms_writeback.writer import (
 __all__ = [
     "ExtractionContext",
     "Extractor",
+    "FieldAccuracyResult",
     "HeuristicExtractor",
     "PmsWritebackWriter",
     "WritebackOutcome",
+    "compute_field_extraction_accuracy",
 ]
