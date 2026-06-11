@@ -168,11 +168,14 @@ def _execute_pipeline(
     personas_path = settings.data_dir / "personas" / f"{customer_id}.json"
     scenarios = load_scenarios(personas_path)
 
+    # Module M1 — pipe the data_dir through so the harness can drive
+    # the writer when ``customer.modules.pms_writeback`` is True.
     harness_report = run_scripted(
         scenarios,
         customer_config=customer,
         structured=structured,
         retriever=retriever,
+        writeback_data_dir=settings.data_dir,
     )
 
     traces_path = settings.data_dir / customer_id / "traces.jsonl"

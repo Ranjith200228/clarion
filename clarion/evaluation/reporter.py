@@ -43,6 +43,7 @@ def build_report(
     report: HarnessReport,
     *,
     traces_path: Path | None = None,
+    writeback_dir: Path | None = None,
 ) -> EvaluationReport:
     """Assemble the EvaluationReport from a HarnessReport + scenarios.
 
@@ -51,6 +52,21 @@ def build_report(
     consistent.
     """
     overall = compute_metric_subset(scenarios, list(report.results), traces_path=traces_path)
+
+    # Module M1 — fold field_extraction_accuracy into the overall metrics
+    # when the writer ran. None signals the module wasn't enabled.
+    if writeback_dir is not None:
+        from clarion.modules.pms_writeback import (
+            compute_field_extraction_accuracy,
+        )
+
+        fae = compute_field_extraction_accuracy(
+            scenarios, report, writeback_dir=writeback_dir
+        )
+        if fae is not None:
+            overall = overall.model_copy(
+                update={"field_extraction_accuracy": fae.accuracy}
+            )
 
     by_difficulty: dict[str, EvaluationCategoryBreakdown] = {}
     for difficulty in sorted({r.difficulty for r in report.results}):

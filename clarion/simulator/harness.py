@@ -20,6 +20,10 @@ import logging
 from collections import Counter
 from collections.abc import Callable, Iterable
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from clarion.modules.pms_writeback import PmsWritebackWriter
 
 from clarion.agents.agent import Agent
 from clarion.agents.llm import FakeLLM, LLMClient, LLMResponse, LLMUsage, ToolCall
@@ -62,12 +66,18 @@ def run_scripted(
     audit: AuditLog | None = None,
     traces: TraceWriter | None = None,
     judge: Judge | None = None,
+    writeback_data_dir: Path | None = None,
 ) -> HarnessReport:
     """Run scenarios with a FakeLLM driven by each scenario's llm_script.
 
     When ``judge`` is provided, every scenario's result also carries a
     ``judge_verdict`` (booking correctness + hallucination + policy
     violations from the Sentinel LLM-as-judge).
+
+    When ``writeback_data_dir`` is provided AND the customer has
+    ``modules.pms_writeback`` enabled, every completed scenario also
+    produces ``summary.json`` + ``task.json`` under
+    ``<writeback_data_dir>/<customer>/pms_writeback/<scenario_id>/``.
     """
     return _run(
         scenarios,
@@ -78,6 +88,7 @@ def run_scripted(
         traces=traces,
         llm_factory=_make_scripted_llm_factory(),
         judge=judge,
+        writeback_data_dir=writeback_data_dir,
     )
 
 
@@ -91,6 +102,7 @@ def run_live(
     audit: AuditLog | None = None,
     traces: TraceWriter | None = None,
     judge: Judge | None = None,
+    writeback_data_dir: Path | None = None,
 ) -> HarnessReport:
     """Run scenarios with a real LLM (e.g. ``OpenAIClient``)."""
     return _run(
@@ -102,6 +114,7 @@ def run_live(
         traces=traces,
         llm_factory=lambda _scenario: llm_client,
         judge=judge,
+        writeback_data_dir=writeback_data_dir,
     )
 
 
@@ -195,7 +208,11 @@ def _run(
     traces: TraceWriter | None,
     llm_factory: LLMFactory,
     judge: Judge | None = None,
+    writeback_data_dir: Path | None = None,
 ) -> HarnessReport:
+    # Module M1 wiring — instantiate once per run if enabled.
+    pms_writer = _maybe_pms_writeback_writer(customer_config, writeback_data_dir)
+
     results: list[HarnessResult] = []
     for s in scenarios:
         result = _run_one(
@@ -209,7 +226,54 @@ def _run(
             judge=judge,
         )
         results.append(result)
+        if pms_writer is not None and writeback_data_dir is not None:
+            _run_pms_writeback(pms_writer, s, result, writeback_data_dir)
     return _build_report(customer_config.customer_id, results)
+
+
+def _maybe_pms_writeback_writer(
+    customer_config: CustomerConfig, writeback_data_dir: Path | None
+) -> PmsWritebackWriter | None:
+    """Return a configured writer when the module is enabled, else None.
+
+    The spec rule "Modules must remain isolated. No hard coupling." is
+    upheld: the harness imports the module lazily inside this helper so
+    runs that don't use the writeback module pay zero import cost.
+    """
+    if writeback_data_dir is None:
+        return None
+    if not customer_config.modules.get("pms_writeback", False):
+        return None
+    from clarion.modules.pms_writeback import PmsWritebackWriter
+
+    return PmsWritebackWriter()
+
+
+def _run_pms_writeback(
+    writer: PmsWritebackWriter,
+    scenario: Scenario,
+    result: HarnessResult,
+    data_dir: Path,
+) -> None:
+    """Best-effort writeback. A writer failure must not fail the run."""
+    from clarion.modules.pms_writeback import ExtractionContext
+
+    try:
+        writer.write(
+            ExtractionContext(
+                customer_id=result.customer_id,
+                conversation_id=scenario.scenario_id,
+                scenario=scenario,
+                result=result,
+            ),
+            data_dir=data_dir,
+        )
+    except Exception:
+        log.exception(
+            "pms_writeback failed for %s/%s — continuing run",
+            result.customer_id,
+            scenario.scenario_id,
+        )
 
 
 def _run_one(
