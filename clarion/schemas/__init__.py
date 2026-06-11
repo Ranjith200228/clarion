@@ -31,8 +31,12 @@ from clarion.schemas.judge import (
     PolicyViolationKind,
 )
 from clarion.schemas.modules import (
+    NO_SHOW_PREDICTION_SCHEMA_VERSION,
     PMS_WRITEBACK_SCHEMA_VERSION,
     ConversationSummary,
+    NoShowModelMetadata,
+    NoShowPrediction,
+    NoShowRiskBand,
     PmsTaskWriteback,
     SummaryOutcome,
     WritebackTaskPriority,
@@ -101,6 +105,10 @@ __all__ = [
     "Outcome",
     "PolicyViolation",
     "PolicyViolationKind",
+    "NO_SHOW_PREDICTION_SCHEMA_VERSION",
+    "NoShowModelMetadata",
+    "NoShowPrediction",
+    "NoShowRiskBand",
     "PMS_WRITEBACK_SCHEMA_VERSION",
     "PmsTask",
     "ConversationSummary",

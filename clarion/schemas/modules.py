@@ -8,7 +8,12 @@ Module M1 (PMS Writeback): two files per completed conversation
   summary.json  -> ConversationSummary
   task.json     -> PmsTaskWriteback
 
-Other modules (M3 no-show, M5 voice) will add their own shapes here.
+Module M3 (No-Show Prediction): per-appointment risk scores plus a
+metadata block describing the trained model.
+  predictions.jsonl  -> one NoShowPrediction per line
+  metadata.json      -> NoShowModelMetadata for the persisted model
+
+Other modules (M5 voice) will add their own shapes here.
 """
 
 from __future__ import annotations
@@ -19,6 +24,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 PMS_WRITEBACK_SCHEMA_VERSION = "1.0.0"
+NO_SHOW_PREDICTION_SCHEMA_VERSION = "1.0.0"
 
 
 # ---------- M1: PMS Writeback ----------
@@ -102,3 +108,58 @@ class PmsTaskWriteback(BaseModel):
 
     # Cross-link back to the sibling summary.
     summary_ref: str = Field(default="summary.json")
+
+
+# ---------- M3: No-Show Prediction ----------
+
+
+NoShowRiskBand = Literal["low", "medium", "high"]
+
+
+class NoShowPrediction(BaseModel):
+    """One scored appointment.
+
+    Produced by ``NoShowPredictor.predict_one`` and written to the
+    module's ``predictions.jsonl`` stream. The risk band is a coarse
+    bucket derived from ``p_no_show`` so downstream front-desk UIs
+    can colour-code without re-deriving thresholds.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = Field(
+        default=NO_SHOW_PREDICTION_SCHEMA_VERSION, pattern=r"^\d+\.\d+\.\d+$"
+    )
+    customer_id: str = Field(min_length=1, pattern=r"^[a-z0-9_-]+$")
+    appointment_id: str = Field(min_length=1)
+    patient_id: str | None = None
+    generated_at: datetime
+    model_version: str = Field(min_length=1)
+
+    p_no_show: float = Field(ge=0.0, le=1.0)
+    risk_band: NoShowRiskBand
+
+
+class NoShowModelMetadata(BaseModel):
+    """Persisted alongside the joblib bundle so we can audit deploys.
+
+    The trainer writes this whenever it persists a model; the
+    predictor reads it to surface ``model_version`` on every
+    prediction. ``feature_columns`` is the post-one-hot column
+    order — the predictor uses it to align incoming feature dicts
+    with the booster's expected layout.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = Field(
+        default=NO_SHOW_PREDICTION_SCHEMA_VERSION, pattern=r"^\d+\.\d+\.\d+$"
+    )
+    model_version: str = Field(min_length=1)
+    trained_at: datetime
+    n_train: int = Field(ge=1)
+    n_features: int = Field(ge=1)
+    roc_auc_cv: float = Field(ge=0.0, le=1.0)
+    top_decile_lift_cv: float = Field(ge=0.0)
+    feature_columns: list[str] = Field(min_length=1)
+    seed: int
