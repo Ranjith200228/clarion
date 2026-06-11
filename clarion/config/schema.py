@@ -89,6 +89,13 @@ class CustomerConfig(BaseModel):
     # System-prompt fragment describing the agent's persona for this customer.
     agent_persona: str = Field(min_length=1)
 
+    # Optional per-customer module toggles. The post-launch module system
+    # (M1 PMS writeback, M3 no-show prediction, M5 voice) is opt-in per
+    # tenant. Map keys are module names; values are bool. Unknown keys
+    # are tolerated so customers can stage a module behind a flag before
+    # the engine grows support for it.
+    modules: dict[str, bool] = Field(default_factory=dict)
+
     @field_validator("enabled_tools")
     @classmethod
     def _unique_tools(cls, v: list[ToolName]) -> list[ToolName]:

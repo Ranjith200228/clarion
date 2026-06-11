@@ -30,6 +30,14 @@ from clarion.schemas.judge import (
     PolicyViolation,
     PolicyViolationKind,
 )
+from clarion.schemas.modules import (
+    PMS_WRITEBACK_SCHEMA_VERSION,
+    ConversationSummary,
+    PmsTaskWriteback,
+    SummaryOutcome,
+    WritebackTaskPriority,
+    WritebackTaskStatus,
+)
 from clarion.schemas.scenarios import (
     Difficulty,
     GroundTruth,
@@ -93,7 +101,13 @@ __all__ = [
     "Outcome",
     "PolicyViolation",
     "PolicyViolationKind",
+    "PMS_WRITEBACK_SCHEMA_VERSION",
     "PmsTask",
+    "ConversationSummary",
+    "PmsTaskWriteback",
+    "SummaryOutcome",
+    "WritebackTaskPriority",
+    "WritebackTaskStatus",
     "Provider",
     "Scenario",
     "SearchSlotsInput",
