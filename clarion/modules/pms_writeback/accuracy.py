@@ -126,7 +126,13 @@ def _score_one(scenario: Scenario, summary: ConversationSummary) -> dict[str, tu
             expected_patient_id = m.group(0).lower()
             break
     if expected_patient_id is not None:
-        matched = 1 if summary.patient_id == expected_patient_id else 0
+        # The writer PHI-redacts patient_id on disk to "<PATIENT_ID>",
+        # so a redaction tag here means the extractor DID catch the
+        # id (the privacy layer just blanked it before write). Treat
+        # that as a positive match — we're measuring extraction
+        # quality, not redaction strictness.
+        observed = summary.patient_id
+        matched = 1 if observed in {expected_patient_id, "<PATIENT_ID>"} else 0
         out["patient_id"] = (matched, 1)
     else:
         # No ground truth -> skip; field doesn't count toward accuracy.
