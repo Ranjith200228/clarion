@@ -19,6 +19,7 @@ from typing import Any
 
 import joblib
 import numpy as np
+from numpy.typing import NDArray
 
 from clarion.modules.no_show_prediction.dataset import FEATURE_COLUMNS, encode_row
 from clarion.schemas import NoShowModelMetadata, NoShowPrediction, NoShowRiskBand
@@ -77,6 +78,14 @@ class NoShowPredictor:
     @property
     def model_version(self) -> str:
         return self._metadata.model_version
+
+    def predict_proba_batch(self, X: NDArray[np.float32]) -> NDArray[np.float64]:
+        """Batch-score a pre-encoded feature matrix.
+
+        Used by the evaluation metric to score a held-out test set
+        without paying the encode_row roundtrip per row.
+        """
+        return self._model.predict_proba(X)[:, 1].astype(np.float64)  # type: ignore[no-any-return]
 
     def predict_one(
         self,

@@ -82,6 +82,13 @@ class EvaluationMetrics(BaseModel):
     # disabled for the customer.
     field_extraction_accuracy: float | None = Field(default=None, ge=0.0, le=1.0)
 
+    # Module M3 (No-Show Prediction) — held-out ROC-AUC and top-decile
+    # lift from scoring a freshly generated synthetic test set through
+    # the persisted booster. None when the module is disabled or no
+    # model artifact exists yet for the customer.
+    no_show_roc_auc: float | None = Field(default=None, ge=0.0, le=1.0)
+    no_show_top_decile_lift: float | None = Field(default=None, ge=0.0)
+
 
 class EvaluationCategoryBreakdown(BaseModel):
     """Per-category metrics ready for the by_difficulty / by_intent dicts."""

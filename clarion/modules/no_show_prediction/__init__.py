@@ -26,6 +26,11 @@ from clarion.modules.no_show_prediction.dataset import (
     encode_row,
     generate_dataset,
 )
+from clarion.modules.no_show_prediction.metric import (
+    NoShowEvalResult,
+    compute_no_show_metrics,
+    compute_top_decile_lift,
+)
 from clarion.modules.no_show_prediction.predictor import (
     RISK_BAND_HIGH_THRESHOLD,
     RISK_BAND_MEDIUM_THRESHOLD,
@@ -47,11 +52,14 @@ __all__ = [
     "FEATURE_COLUMNS",
     "MODEL_VERSION",
     "NUMERIC_FEATURES",
+    "NoShowEvalResult",
     "NoShowPredictor",
     "PAYERS",
     "RISK_BAND_HIGH_THRESHOLD",
     "RISK_BAND_MEDIUM_THRESHOLD",
     "TrainResult",
+    "compute_no_show_metrics",
+    "compute_top_decile_lift",
     "encode_row",
     "generate_dataset",
     "persist",

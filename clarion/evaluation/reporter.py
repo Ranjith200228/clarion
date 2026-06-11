@@ -44,6 +44,8 @@ def build_report(
     *,
     traces_path: Path | None = None,
     writeback_dir: Path | None = None,
+    no_show_model_path: Path | None = None,
+    no_show_eval_seed: int | None = None,
 ) -> EvaluationReport:
     """Assemble the EvaluationReport from a HarnessReport + scenarios.
 
@@ -66,6 +68,22 @@ def build_report(
         if fae is not None:
             overall = overall.model_copy(
                 update={"field_extraction_accuracy": fae.accuracy}
+            )
+
+    # Module M3 — fold no_show_roc_auc + no_show_top_decile_lift when the
+    # trained model artifact exists. Held-out eval uses a seed offset
+    # from the training seed so it's a real out-of-fold measurement.
+    if no_show_model_path is not None:
+        from clarion.modules.no_show_prediction import compute_no_show_metrics
+
+        seed = no_show_eval_seed if no_show_eval_seed is not None else 4242
+        ns_result = compute_no_show_metrics(no_show_model_path, seed=seed)
+        if ns_result is not None:
+            overall = overall.model_copy(
+                update={
+                    "no_show_roc_auc": ns_result.roc_auc,
+                    "no_show_top_decile_lift": ns_result.top_decile_lift,
+                }
             )
 
     by_difficulty: dict[str, EvaluationCategoryBreakdown] = {}

@@ -86,11 +86,14 @@ def run_evaluation(
     # strictly one-way.
     from clarion.evaluation.reporter import build_report
 
+    writeback_dir, no_show_model_path = _module_paths(customer_id, settings=settings)
     return build_report(
         customer_id,
         scenarios,
         harness_report,
         traces_path=traces_path if traces_path.exists() else None,
+        writeback_dir=writeback_dir,
+        no_show_model_path=no_show_model_path,
     )
 
 
@@ -122,11 +125,14 @@ def run_and_write_artifacts(
     )
 
     traces_path_or_none = traces_path if traces_path.exists() else None
+    writeback_dir, no_show_model_path = _module_paths(customer_id, settings=settings)
     report = build_report(
         customer_id,
         scenarios,
         harness_report,
         traces_path=traces_path_or_none,
+        writeback_dir=writeback_dir,
+        no_show_model_path=no_show_model_path,
     )
     trace_report = build_trace_report(
         customer_id,
@@ -180,3 +186,28 @@ def _execute_pipeline(
 
     traces_path = settings.data_dir / customer_id / "traces.jsonl"
     return scenarios, harness_report, traces_path
+
+
+def _module_paths(
+    customer_id: str, *, settings: Settings
+) -> tuple[Path | None, Path | None]:
+    """Resolve the optional module artifact paths the reporter consumes.
+
+    Both come back as None when the module is disabled OR the artifact
+    doesn't exist — the reporter treats None as "skip the metric".
+    """
+    customer = load_customer(customer_id, settings=settings)
+
+    writeback_dir: Path | None = None
+    if customer.modules.get("pms_writeback", False):
+        candidate = settings.data_dir / customer_id / "pms_writeback"
+        if candidate.exists():
+            writeback_dir = candidate
+
+    no_show_model_path: Path | None = None
+    if customer.modules.get("no_show_prediction", False):
+        candidate = settings.data_dir / customer_id / "no_show_prediction" / "model.joblib"
+        if candidate.exists():
+            no_show_model_path = candidate
+
+    return writeback_dir, no_show_model_path

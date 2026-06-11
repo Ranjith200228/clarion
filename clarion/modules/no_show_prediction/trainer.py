@@ -22,12 +22,12 @@ from typing import Any
 
 import joblib
 import numpy as np
-from numpy.typing import NDArray
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 from xgboost import XGBClassifier
 
 from clarion.modules.no_show_prediction.dataset import FEATURE_COLUMNS, Dataset
+from clarion.modules.no_show_prediction.metric import compute_top_decile_lift
 from clarion.schemas import NoShowModelMetadata
 
 # Bumped whenever the training pipeline or feature layout changes.
@@ -90,7 +90,7 @@ def train(
         fold_model.fit(X[train_idx], y[train_idx], verbose=False)
         proba = fold_model.predict_proba(X[test_idx])[:, 1]
         cv_aucs.append(float(roc_auc_score(y[test_idx], proba)))
-        cv_lifts.append(_top_decile_lift(y[test_idx], proba))
+        cv_lifts.append(compute_top_decile_lift(y[test_idx], proba.astype(np.float64)))
 
     # Final fit on everything.
     final = XGBClassifier(**cfg)
@@ -124,23 +124,3 @@ def persist(result: TrainResult, path: Path) -> None:
     joblib.dump(bundle, path)
 
 
-def _top_decile_lift(y_true: NDArray[np.int8], y_score: NDArray[np.float64]) -> float:
-    """Lift of the top-10% scored cohort vs. the base rate.
-
-    Defined as: positive rate among the top decile by score, divided
-    by the overall positive rate. Lift of 1.0 means the model has no
-    signal; lift > 1.0 means the front desk would catch more no-shows
-    by working the top decile than by calling everyone uniformly.
-
-    Returns 0.0 when the base rate is zero (degenerate dataset).
-    """
-    n = len(y_true)
-    if n == 0:
-        return 0.0
-    base_rate = float(np.mean(y_true))
-    if base_rate <= 0.0:
-        return 0.0
-    k = max(1, n // 10)
-    top_idx = np.argsort(y_score)[-k:]
-    top_rate = float(np.mean(y_true[top_idx]))
-    return round(top_rate / base_rate, 4)
