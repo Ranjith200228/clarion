@@ -25,6 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 PMS_WRITEBACK_SCHEMA_VERSION = "1.0.0"
 NO_SHOW_PREDICTION_SCHEMA_VERSION = "1.0.0"
+VOICE_SCHEMA_VERSION = "1.0.0"
 
 
 # ---------- M1: PMS Writeback ----------
@@ -163,3 +164,77 @@ class NoShowModelMetadata(BaseModel):
     top_decile_lift_cv: float = Field(ge=0.0)
     feature_columns: list[str] = Field(min_length=1)
     seed: int
+
+
+# ---------- M5: Voice Layer ----------
+
+
+AudioFormat = Literal["wav", "mp3", "ogg", "webm"]
+
+
+class AudioMetadata(BaseModel):
+    """Container metadata for a chunk of audio carried over the API.
+
+    The API layer ferries audio as base64 strings to keep the JSON
+    transport simple — this block tells the decoder what it's
+    decoding without sniffing the payload.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    format: AudioFormat
+    sample_rate_hz: int = Field(ge=8000, le=48000)
+    duration_ms: int = Field(ge=0)
+    n_bytes: int = Field(ge=0)
+
+
+class TranscriptionResult(BaseModel):
+    """One STT pass, structured.
+
+    ``confidence`` is null for transcribers that don't surface one
+    (the echo-mode test stub). The orchestrator passes the ``text``
+    field straight into the agent loop.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = Field(default=VOICE_SCHEMA_VERSION, pattern=r"^\d+\.\d+\.\d+$")
+    text: str
+    language: str | None = None
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    duration_ms: int = Field(ge=0)
+    transcriber_version: str = Field(min_length=1)
+
+
+class VoiceTurnRequest(BaseModel):
+    """One inbound voice turn.
+
+    Audio rides as base64 because the JSON wire stays opaque to
+    intermediaries (proxies, gateway log scrubbers) — the alternative
+    multipart upload bypasses every middleware we care about.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = Field(default=VOICE_SCHEMA_VERSION, pattern=r"^\d+\.\d+\.\d+$")
+    customer_id: str = Field(min_length=1, pattern=r"^[a-z0-9_-]+$")
+    session_id: str = Field(min_length=1)
+    audio_b64: str = Field(min_length=1)
+    audio_metadata: AudioMetadata
+
+
+class VoiceTurnResponse(BaseModel):
+    """One outbound voice turn — STT input, agent text, TTS audio."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = Field(default=VOICE_SCHEMA_VERSION, pattern=r"^\d+\.\d+\.\d+$")
+    customer_id: str = Field(min_length=1, pattern=r"^[a-z0-9_-]+$")
+    session_id: str = Field(min_length=1)
+    transcription: TranscriptionResult
+    assistant_text: str
+    audio_b64: str = Field(min_length=1)
+    audio_metadata: AudioMetadata
+    latency_ms_stt: int = Field(ge=0)
+    latency_ms_agent: int = Field(ge=0)
+    latency_ms_tts: int = Field(ge=0)
