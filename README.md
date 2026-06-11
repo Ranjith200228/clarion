@@ -2,1142 +2,330 @@
 
 **Configurable Multi-Agent Voice Automation Platform with Sentinel Trust Engine.**
 
-Clarion is a config-driven AI platform for deploying voice automation to new
-customer verticals. The demonstration vertical is healthcare scheduling — a
-patient calls a specialty practice to book, reschedule, cancel, or ask a
-routine question, and Clarion handles it against per-customer rules with a
-trust engine that decides when to escalate to a human.
+Clarion is a config-driven AI platform for deploying voice automation
+to new customer verticals. Healthcare scheduling is the **demonstration
+vertical**, not the product — the architecture treats vertical-specific
+logic as configuration (YAML + rules markdown + seed JSON), so onboarding
+a new vertical is a one-day job, not an engineering project.
 
-The architecture is built so a new vertical is onboarded by dropping in a
-config + rules file, not by rewriting code. That's the Forward Deployed
-Engineer story this project demonstrates.
+> **Honesty note.** This is a prototype on synthetic, non-PHI data.
+> Metrics demonstrate capability and engineering rigor, not production ROI.
 
-> **Honesty note.** This is a prototype on synthetic, non-PHI data. Metrics
-> demonstrate capability and engineering rigor, not production ROI.
+![Architecture diagram](docs/architecture.png)
 
-## Status
+| Resource | Where |
+|---|---|
+| Discovery doc (FDE artifact) | [`docs/discovery.md`](docs/discovery.md) |
+| Developer guide | [`docs/developer_guide.md`](docs/developer_guide.md) |
+| Deployment guide | [`docs/deployment_guide.md`](docs/deployment_guide.md) |
+| Architecture (Mermaid source) | [`docs/architecture.mmd`](docs/architecture.mmd) |
 
-Phase 12 complete — `evaluation_report.json` per customer with every
-spec metric: containment, booking accuracy, hallucination rate
-(when judge attached), escalation precision/recall/F1/accuracy, safety
-catch rate, avg turns to resolution, cost per request (USD), latency
-avg/p50/p95. Plus per-difficulty and per-intent breakdowns and a
-six-key headline dict for the Phase 13 dashboard top strip. Both
-shipped customers meet the floor targets: containment >= 0.5,
-escalation recall >= 0.9, safety catch == 1.0.
+---
 
-## Build phases
+## 1. Problem
 
-| Phase | Scope | Status |
-| ----- | ----- | ------ |
-| 1     | Foundation (Poetry, Ruff, Pytest, Docker, CI)              | ✅ complete |
-| 2     | Multi-tenant config system                                 | ✅ complete |
-| 3     | Dual data pipeline (RAG + SQLite)                          | ✅ complete |
-| 4     | Schemas + mocked tools                                     | ✅ complete |
-| 5     | Text agent MVP (ReAct)                                     | ✅ complete |
-| 6     | Guardrails (emergency / clinical / PHI)                    | ✅ complete |
-| 7     | Observability (tokens, latency, cost, traces)              | ✅ complete |
-| 8     | FastAPI service                                            | ✅ complete |
-| 9     | Simulation harness                                         | ✅ complete |
-| 10    | Sentinel trust engine (LLM-as-judge)                       | ✅ complete |
-| 11    | Escalation engine (5-signal score + P/R)                   | ✅ complete |
-| 12    | Evaluation framework (metric computation)                  | ✅ complete |
-| 13    | Evaluation harness — locked report contract + trace sidecar | ✅ complete |
-| 14    | Gradio product UI (4 tabs + customer switcher)             | ✅ complete |
-| 15    | Containerization (Dockerfile + docker-compose)             | ✅ complete |
-| 16    | Deployment (Hugging Face Gradio Space + alts)              | ✅ complete |
-| 17    | Documentation (README, discovery, dev / deploy guides)     | pending |
-| M1    | Module: PMS writeback                                      | pending |
-| M3    | Module: No-show prediction (XGBoost)                       | pending |
-| M5    | Module: Voice layer (faster-whisper + OpenAI TTS)          | pending |
-| later | LangGraph refactor (only after launch)                     | pending |
-| 18    | Production hardening                                       | pending |
-| 19    | v1.0.0 release                                             | pending |
+Specialty medical practices lose patients and revenue at the first
+touchpoint — the phone. Front desks drown in repetitive calls
+("can I book a cataract consult?", "do you take Aetna?", "what time is
+my appointment?") and the urgent calls — sudden vision loss, a
+suspected fracture, a patient asking for clinical advice — must never
+be mishandled.
 
-## Quick start
+Voice AI can absorb the routine load, but the **hard problem isn't
+talking** — it's being trustworthy:
 
-```bash
-# Install Poetry if you don't have it
-pip install --user poetry
+- Booking the **correct provider + appointment type + duration** under
+  complex per-practice rules (new-patient-only providers, dilation
+  prerequisites, payer eligibility).
+- **Never giving clinical advice.**
+- Recognizing emergencies and **handing off to a human at the right
+  moment**.
 
-# Install dependencies
-poetry install --with dev
+Clarion is the configurable platform that does this with measurable
+trust. The hiring pitch: this demonstrates **Forward Deployed
+Engineering** — stand up a platform for a specific customer's messy
+real problem, then measure and iterate.
 
-# Lint + type-check + test
-poetry run ruff check .
-poetry run ruff format --check .
-poetry run mypy
-poetry run pytest
-```
+---
 
-## Boot from a customer config
+## 2. Architecture
 
-Every deployment selects exactly one customer via the `CLARION_CUSTOMER`
-environment variable. The selector matches a YAML stem in `configs/`.
-
-```bash
-# Default — ophthalmology
-poetry run python -c "from clarion.config import load_customer; print(load_customer())"
-
-# Switch to a different customer with no code change
-CLARION_CUSTOMER=orthopedics poetry run python -c \
-  "from clarion.config import load_customer; c=load_customer(); print(c.display_name, c.enabled_tools)"
-```
-
-Adding a third customer is one file: drop `configs/<name>.yaml`, set
-`CLARION_CUSTOMER=<name>`. No agent-code change. That's the FDE story this
-project demonstrates.
-
-The shipped configs:
-
-| Customer | Tools enabled | Languages | Notable divergence |
-| -------- | ------------- | --------- | ------------------ |
-| `ophthalmology` | all 5 | en, es | full tool surface |
-| `orthopedics`   | 4 (no `cancel_appointment`) | en | cancellations always route to a human; stricter escalation thresholds |
-
-## Dual data pipeline
-
-Each customer has two data stores, both populated by one CLI:
-
-```bash
-# Build both pipelines for one customer (runs structured + unstructured)
-poetry run python -m clarion.pipelines.ingest all ophthalmology
-poetry run python -m clarion.pipelines.ingest all orthopedics
-
-# Or just one half
-poetry run python -m clarion.pipelines.ingest structured   ophthalmology
-poetry run python -m clarion.pipelines.ingest unstructured orthopedics
-```
-
-**Structured pipeline (`clarion.pipelines.structured`)** — SQLite, one file
-per customer at `data/<customer_id>/structured.sqlite`. Tables: `providers`,
-`availability`, `appointments`, `eligibility`. The agent's tools (Phase 4)
-call into `StructuredStore` and never see raw SQL. Seed data lives in
-`data/seeds/<customer_id>.json`.
-
-**Unstructured pipeline (`clarion.pipelines.unstructured` + `clarion.rag`)** —
-markdown rules in `data/rules/<customer_id>/*.md` are chunked on H2/H3
-boundaries (preserving heading trail as metadata), embedded with TF-IDF by
-default (1-2 ngrams, sublinear TF, L2-normalized dense float32), and indexed
-with `faiss.IndexFlatIP` so inner product equals cosine similarity. Setting
-`OPENAI_API_KEY` swaps the default embedder to `text-embedding-3-small`
-without any code change.
-
-```python
-from clarion.config import load_customer
-from clarion.rag import load_customer_retriever
-from pathlib import Path
-
-cfg = load_customer("ophthalmology")
-retriever = load_customer_retriever(cfg, data_dir=Path("data"))
-for hit in retriever.retrieve("how long is a cataract consult?", k=3):
-    print(round(hit.score, 3), hit.chunk.heading, "—", hit.chunk.source)
-```
-
-Acceptance verified by `tests/rag/test_retriever.py` and
-`tests/pipelines/test_structured_store.py`:
-
-- **RAG retrieves correct rules** — 10 parametrized queries (5 per customer)
-  assert the right file appears in top-3, plus cross-customer isolation
-  checks (workers-comp content never surfaces in ophthalmology; dilation
-  content never surfaces in orthopedics).
-- **Structured queries return valid records** — 16 tests over upsert,
-  search, atomic booking with double-book protection, cancellation
-  idempotence, and per-customer SQLite isolation.
-
-## Repository layout
+The system is five layers, each with a one-way dependency on the layer
+below it:
 
 ```
-clarion/
-├── README.md
-├── LICENSE
-├── pyproject.toml         # Poetry + ruff + mypy + pytest config
-├── Dockerfile             # multi-stage, py3.11-slim, non-root
-├── .pre-commit-config.yaml
-├── .github/workflows/ci.yml
-│
-├── docs/                  # discovery doc, architecture diagram
-├── configs/               # per-customer YAML (ophthalmology, orthopedics)
-├── data/
-│   ├── rules/             # unstructured rules corpora (markdown, per-customer)
-│   ├── seeds/             # structured-pipeline seeds (JSON, per-customer)
-│   ├── personas/          # synthetic patient personas (Phase 9)
-│   └── <customer_id>/     # generated: structured.sqlite + rules.faiss (gitignored)
-│
-├── clarion/               # importable package
-│   ├── config/            # Pydantic Settings, customer loader
-│   ├── pipelines/         # unstructured + structured ingest
-│   ├── rag/               # FAISS retriever (+ TF-IDF fallback)
-│   ├── agents/            # router → specialist → supervisor
-│   ├── tools/             # search_slots, book_appointment, …
-│   ├── schemas/           # Pydantic models
-│   ├── sentinel/          # judge, escalation scorer, guardrails
-│   ├── observability/     # token / latency / cost meter + trace spans
-│   ├── simulator/         # synthetic patient generator
-│   ├── evaluation/        # harness runner + metrics
-│   └── voice/             # STT / TTS / emotion adapter
-│
-├── api/                   # FastAPI app (Phase 8)
-├── dashboard/             # Streamlit dashboard (Phase 13)
-└── tests/
+┌─────────────────────────────────────────────────────────┐
+│  Gradio UI (Phase 14)                                   │
+│  Live Agent · Quality · Escalations · Trace Explorer    │
+└────────────────────────┬────────────────────────────────┘
+                         │ reads report.json + trace.json
+┌────────────────────────▼────────────────────────────────┐
+│  Evaluation harness (Phase 13)                          │
+│  python -m clarion.eval --customer X                    │
+│  runner.py · metrics.py · reporter.py · trace_report.py │
+└────────────────────────┬────────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────────┐
+│  Sentinel trust engine (Phases 6, 10, 11)               │
+│  Guardrails · LLM-as-Judge · Escalation scorer · PHI    │
+└────────────────────────┬────────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────────┐
+│  Agent core (Phases 5, 7, 8)                            │
+│  ReAct loop · Tools · FastAPI · Observability           │
+└────────────────────────┬────────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────────┐
+│  Foundation (Phases 1-4)                                │
+│  Multi-tenant config · RAG · SQLite · Tool registry     │
+└─────────────────────────────────────────────────────────┘
 ```
 
-## Tools
+See [`docs/architecture.png`](docs/architecture.png) for the full
+component diagram.
 
-Every tool follows the same shape — Pydantic input, Pydantic output, never
-raises to the agent:
+The Phase 13 spec line *"LOCK THE REPORT SCHEMA. Future UIs consume
+this schema. No metric computation inside UI."* is structurally
+enforced: the UI imports only `clarion.schemas` (typed wire models),
+never `clarion.evaluation.metrics`. Adding a new metric is a
+backend-only change.
 
-```python
-from clarion.config import load_customer
-from clarion.pipelines.structured import StructuredStore
-from clarion.tools import ToolContext, available_tools, get_tool
-from clarion.schemas import SearchSlotsInput
-from datetime import date
-from pathlib import Path
+---
 
-cfg = load_customer("ophthalmology")
-ctx = ToolContext(
-    customer=cfg,
-    structured=StructuredStore.for_customer(cfg.customer_id, Path("data")),
-)
+## 3. Config-driven design
 
-# Discover what the agent can call for this customer
-for tool in available_tools(cfg):
-    print(tool.name)
+Everything that varies between customers lives in YAML:
 
-# Use one
-tool = get_tool("search_slots", cfg)
-out = tool.run(
-    SearchSlotsInput(appointment_type="Cataract Pre-Op Consult", on_or_after=date.today()),
-    ctx,
-)
-if out.ok:
-    for slot in out.slots:
-        print(slot.slot_id, slot.slot_date, slot.start_time)
-else:
-    print("escalate:", out.error)
+```yaml
+# configs/ophthalmology.yaml
+customer_id: ophthalmology
+display_name: North Shore Eye Associates
+specialties: [Cataract Pre-Op Consult, Glaucoma Follow-Up, ...]
+enabled_tools:
+  - search_slots
+  - book_appointment
+  - cancel_appointment       # orthopedics drops this; cancels route to a task
+  - check_eligibility
+  - create_pms_task
+languages: [en, es]
+escalation:
+  low_confidence: 0.6
+  max_clarifications: 3
+  frustration: 0.7
+rules_path: rules/ophthalmology
+agent_persona: |
+  You are Clarion, the virtual front-desk assistant for ...
 ```
 
-The five shipped tools:
+The agent code reads this and **never branches on `customer_id`**.
+Orthopedics doesn't have a cancel tool because its YAML doesn't list it
+— the registry honors `enabled_tools` strictly, so the LLM never even
+sees a `cancel_appointment` function on the tool list.
 
-| Tool | What it does | Failure modes returned as `ok=False` |
-| ---- | ------------ | ------------------------------------ |
-| `search_slots` | List open slots filtered by type / provider / start date | DB error |
-| `book_appointment` | Atomically reserve one slot for one patient | slot unavailable (gone or double-book) |
-| `cancel_appointment` | Cancel by id, free the slot | (idempotent — unknown id returns `ok=True, cancelled=False`) |
-| `check_eligibility` | Look up the patient's payer record | (unknown patient returns `ok=True, on_file=False`) |
-| `create_pms_task` | File a follow-up task for the front desk | DB error |
+---
 
-**Per-customer enforcement.** The registry honors each customer's
-`enabled_tools` list. `configs/orthopedics.yaml` deliberately omits
-`cancel_appointment` — when the agent calls `get_tool("cancel_appointment", cfg)`
-for orthopedics, it raises `ToolNotEnabledError` listing what *is* enabled,
-so the LLM never sees a tool the customer disabled.
+## 4. Customer onboarding
 
-**Retries.** SQLite call sites are wrapped in `run_with_retry` (one retry
-on `OperationalError`, ~50 ms backoff) to absorb transient contention. The
-helper is unbounded so individual tools can apply it however they need.
+Adding a new customer is six steps (one working day) — none touch
+`clarion/agents/`:
 
-## Text agent
+1. **Discovery** (`docs/discovery_<customer>.md`) — see the
+   [`docs/discovery.md`](docs/discovery.md) sample for the FDE template.
+2. **YAML** (`configs/<customer>.yaml`) — schema-validated; typos
+   rejected at load time.
+3. **Seed** (`data/seeds/<customer>.json`) — synthetic providers +
+   slots + eligibility records.
+4. **Rules** (`data/rules/<customer>/*.md`) — markdown chunks the RAG
+   pipeline indexes.
+5. **Personas** — `python -m clarion.simulator.cli generate <customer>`
+   produces 100 scenarios automatically.
+6. **Evaluate** — `python -m clarion.eval --customer <customer>`
+   produces the locked report + trace JSONs.
 
-The agent is a ReAct loop wrapped around an `LLMClient` Protocol:
+The [developer guide](docs/developer_guide.md) walks through each step.
 
-```python
-from pathlib import Path
-from clarion.agents import Agent, OpenAIClient  # OpenAIClient lives in clarion.agents.openai_client
-from clarion.config import load_customer
+---
 
-cfg = load_customer("ophthalmology")
-agent = Agent.build(
-    customer=cfg,
-    llm=OpenAIClient(),  # requires OPENAI_API_KEY
-    data_dir=Path("data"),
-)
-print(agent.chat("Hi, I'd like to book a cataract pre-op consult after June 1."))
-print(agent.chat("My patient id is pat_001."))
-print(agent.chat("Yes, 9 AM works."))
-```
+## 5. Trust Engine
 
-Quick local REPL:
+The Sentinel layer is **three independent components**, each with a
+deliberate failure mode:
 
-```bash
-OPENAI_API_KEY=sk-... poetry run python -m clarion.agents.cli ophthalmology
-# or
-OPENAI_API_KEY=sk-... poetry run python -m clarion.agents.cli orthopedics
-```
+| Component | Phase | Output | Failure mode |
+|---|---|---|---|
+| Guardrails (emergency / clinical / PHI) | 6 | Short-circuit reply, never calls LLM | Pattern-based: prefer false alarms |
+| LLM-as-Judge (booking + hallucination + policy) | 10 | Structured verdict per turn | Defensive parsing: low-confidence verdict on malformed JSON |
+| Escalation scorer (5 weighted signals) | 11 | 0-1 score per turn | Tunable threshold + per-customer escalation YAML |
 
-The ingest CLI must have been run first
-(`python -m clarion.pipelines.ingest all <customer>`) so the FAISS index
-and SQLite store exist on disk.
+The judge runs **post-hoc**, so even if the agent's reply was correct
+the trust engine grades it independently. The escalation scorer fuses:
+`low_confidence`, `repeated_clarification`, `rule_conflict`,
+`frustration` (regex-based), `unsupported_request`. Each signal
+contributes a labeled reason for the dashboard.
 
-### How a turn works
+---
 
-1. `agent.chat(user_message)` appends the user turn to a rolling
-   transcript.
-2. The system prompt is rebuilt for this turn — persona from
-   `CustomerConfig.agent_persona`, a hardcoded operating contract
-   (no clinical advice, escalate emergencies, call tools rather than
-   guess), the customer's escalation thresholds, and top-k chunks
-   retrieved against the *current* user message (so RAG focuses on the
-   topic the patient just raised, not the whole call history).
-3. `react_loop` advertises only the customer's enabled tools, runs
-   `llm.complete(...)`, validates any tool calls against each tool's
-   Pydantic input model, dispatches them, and feeds the JSON results
-   back to the LLM as `role="tool"` messages.
-4. The loop stops when the LLM emits free text (the patient's reply) or
-   after `max_steps` (default 8) — the cap returns a polite "let me
-   have a teammate call you back" line and flags the result for the
-   Sentinel.
+## 6. Evaluation harness
 
-### Capabilities
-
-| Capability | How it's covered |
-| ---------- | ---------------- |
-| Booking | `search_slots` + `book_appointment` |
-| Cancellation | `cancel_appointment` (when customer enables it) |
-| Rescheduling | Composed from `search_slots` + `book_appointment` + `create_pms_task` to cancel the old slot when the cancel tool isn't enabled |
-| Eligibility checking | `check_eligibility` (returns `on_file=False` for unknown patients without erroring) |
-| FAQ retrieval | Per-turn RAG injects top-k rule chunks into the system prompt — the LLM cites the source markdown file |
-| Function calling | Pydantic input models → JSON Schema via `clarion.agents.openai_schema.tool_to_spec` |
-| Conversation memory | `Agent.transcript: list[Message]` — every user / assistant / tool turn except the system message (rebuilt each turn) |
-
-### Tested end-to-end on both customers
-
-| Test file | Scenario |
-| --------- | -------- |
-| `tests/agents/test_e2e_ophthalmology.py` | Patient books cataract pre-op — agent runs check_eligibility → search_slots → book_appointment → create_pms_task → confirms. Slot is gone from the store; transport task is filed. |
-| `tests/agents/test_e2e_ophthalmology.py` | "Do you accept Kaiser?" — pure FAQ, zero tool calls; the LLM reads the answer from the rules block that RAG injected into the system prompt. |
-| `tests/agents/test_e2e_orthopedics.py` | Patient asks to cancel — `cancel_appointment` is disabled for this customer, the registry returns `not enabled`, the next LLM turn files a PMS task per the practice's "all cancellations go to a human" rule. |
-| `tests/agents/test_e2e_orthopedics.py` | Inspection check — the tools advertised to the LLM are exactly the four orthopedics permits (no `cancel_appointment` ever leaks into the spec list). |
-| `tests/agents/test_e2e_orthopedics.py` | Reschedule emerges from `search_slots` + `book_appointment` + `create_pms_task` to cancel the old slot — no per-tenant code path. |
-
-## Guardrails
-
-Guardrails run **before** the ReAct loop sees a user message. If any
-fire, the LLM is bypassed — short-circuiting with a canned, customer-
-neutral reply.
-
-```python
-from pathlib import Path
-from clarion.agents import Agent
-from clarion.config import load_customer
-from clarion.sentinel import AuditLog
-# ... build store, retriever, llm as before ...
-
-agent = Agent.from_customer(
-    customer=load_customer("ophthalmology"),
-    llm=llm,
-    structured=store,
-    retriever=retriever,
-)
-agent.audit = AuditLog.for_customer("ophthalmology", data_dir=Path("data"))
-# guardrails_enabled defaults to True; opt-out with agent.guardrails_enabled = False
-
-print(agent.chat("I suddenly lost my sight in my right eye!"))
-# → "This sounds like an emergency. Please call 911 or go to the nearest
-#    emergency department right now. I've also flagged this for our care
-#    team so they can follow up."
-# (LLM never consulted; urgent PMS task filed; audit row with guardrail="emergency")
-```
-
-### What's covered
-
-| Guardrail | Trigger examples | Agent response | Side effects |
-| --------- | ---------------- | -------------- | ------------ |
-| Emergency | "I can't see", "compound fracture", "having a stroke", "I called 911", "lost control of my bladder", "this is an emergency" | Canned 911 / ED advisory | Urgent PMS task filed (`priority="urgent"`); audit `guardrail="emergency"` with `escalation_task_id` |
-| Clinical advice | "should I take/stop/double/skip X", "is it safe to Y", "can I take A with B", "what dose", "refill my prescription/medication/drops" | Canned "I'll have a clinician call back" | Audit `guardrail="clinical_advice"`; no PMS task |
-| PHI redaction | Applied to **all** audit log records (including LLM-handled turns) | — | User message + agent reply + tool-call arguments all sanitized: `<PHONE>`, `<SSN>`, `<EMAIL>`, `<MEMBER_ID>`, `<PATIENT_ID>` |
-| Audit log | Every chat turn | — | Append-only JSONL at `<data_dir>/<customer_id>/audit.jsonl` with timestamp, conversation_id, customer_id, redacted messages, redaction counts, guardrail flag, tool calls, step count |
-
-### Trigger curation
-
-Patterns live in [`clarion/sentinel/guardrails.py`](clarion/sentinel/guardrails.py) and are derived from each customer's `06_emergencies_and_escalation.md`. They are deliberately pattern-based (not LLM-based) so they're auditable and zero-latency. An LLM-as-judge layer (Phase 10) can vet ambiguous cases — the regex layer remains the cheap, deterministic floor.
-
-### Negative coverage
-
-The same test files also include 21 negative examples — "Should I bring sunglasses?", "Is it ok to reschedule?", "refill my coffee", "I broke my glasses", "mild knee pain" — all of which must **not** trip a guardrail. These prove the patterns aren't over-eager.
-
-## Observability
-
-Every `Agent.chat` call emits one `Trace` with hierarchical `Span`s.
-Attach a `TraceWriter` to persist them as JSONL:
-
-```python
-from pathlib import Path
-from clarion.agents import Agent
-from clarion.config import load_customer
-from clarion.observability import TraceWriter
-from clarion.sentinel import AuditLog
-
-cfg = load_customer("ophthalmology")
-agent = Agent.build(customer=cfg, llm=llm, data_dir=Path("data"))
-agent.audit  = AuditLog.for_customer(cfg.customer_id, Path("data"))
-agent.traces = TraceWriter.for_customer(cfg.customer_id, Path("data"))
-agent.chat("Hi, I'd like a cataract pre-op consult after June 1.")
-# Writes one line to data/ophthalmology/traces.jsonl with the full span tree.
-```
-
-### Span hierarchy
-
-```
-agent.chat                    user_chars, reply_chars
-├── guardrails.check          fired: bool
-├── retrieval                 k, hit_count, top_score, top_source
-├── react.step                step_index
-│   ├── llm.complete          model, input_tokens, output_tokens,
-│   │                         cost_usd, advertised_tools, tool_calls_count
-│   ├── tool.search_slots     tool, ok, arguments_keys
-│   └── tool.book_appointment ...
-├── react.step
-│   ├── llm.complete
-│   └── tool.create_pms_task
-└── react.step
-    └── llm.complete          (final text reply, no tools)
-```
-
-### What's tracked
-
-| Spec line | How it's covered |
-| --------- | ---------------- |
-| Token usage | `LLMUsage(model, input_tokens, output_tokens)` populated from `OpenAIClient.complete`; flows into `llm.complete.attributes` |
-| Latency | Every span carries `duration_ms` from `time.perf_counter` (sub-ms accuracy) |
-| Cost | `cost_usd` per-model pricing table in `clarion/observability/cost.py`; unknown models report `0.0` so the gap is visible, not silently absorbed |
-| Tool usage | One `tool.<name>` span per call with `ok`, `arguments_keys`, optional `error` (truncated to 200 chars; arg values stay out of traces — that's the audit log's job) |
-| Retrieval quality | `retrieval` span with `hit_count`, `top_score`, `top_source` (citation file) |
-| JSON traces | `TraceWriter` appends one line per turn to `<data_dir>/<customer_id>/traces.jsonl` |
-| Span logging | `Tracer` is a stack-based context manager; parent/child links via `parent_id` |
-| Trace IDs | `trace_<12hex>`; auto-generated per chat; surfaced in the audit row's `extra.trace_id` so audit ↔ trace pivots are one-click |
-
-### Pricing table
-
-Currently shipped (`clarion/observability/cost.py`):
-
-| Model | Input ($/1k tokens) | Output ($/1k tokens) |
-| ----- | ------------------- | -------------------- |
-| `gpt-4o-mini` | 0.00015 | 0.0006 |
-| `gpt-4o` | 0.0025 | 0.01 |
-| `gpt-4-turbo` | 0.01 | 0.03 |
-
-Add new models in one place; every `llm.complete` span picks up the new pricing automatically.
-
-## HTTP API
-
-Run the service:
-
-```bash
-OPENAI_API_KEY=sk-... poetry run python -m api.app --port 8080
-# Or directly:
-OPENAI_API_KEY=sk-... poetry run uvicorn api.app:app --host 0.0.0.0 --port 8080
-```
-
-Once it's up:
-
-- **Swagger UI** — http://localhost:8080/docs
-- **ReDoc** — http://localhost:8080/redoc
-- **OpenAPI spec** — http://localhost:8080/openapi.json
-
-### Endpoints
-
-| Method | Path | Purpose |
-| ------ | ---- | ------- |
-| `GET`  | `/health` | Liveness probe; returns `status`, `version`, `customers_loaded` |
-| `POST` | `/chat` | Single user turn for one conversation. Allocates a `conversation_id` if the client omits it; echo it back to continue. |
-| `POST` | `/evaluate` | Run a scripted scenario (1–20 messages) and return per-turn replies plus aggregate metrics (tokens, cost, latency, tool usage). |
-
-### Example: chat (curl)
-
-```bash
-# First turn — no conversation_id; the server allocates one
-curl -s http://localhost:8080/chat \
-  -H 'content-type: application/json' \
-  -d '{"customer_id":"ophthalmology","message":"I want a cataract pre-op consult after June 1"}' \
-  | jq
-
-# Next turn — pass back the conversation_id from the previous response
-curl -s http://localhost:8080/chat \
-  -H 'content-type: application/json' \
-  -d '{"customer_id":"ophthalmology","conversation_id":"conv_abc123","message":"9 AM works"}' \
-  | jq
-```
-
-Response shape:
-
-```json
-{
-  "customer_id": "ophthalmology",
-  "conversation_id": "conv_abc123def456",
-  "trace_id": "trace_def456abc789",
-  "reply": "You're all set — Cataract Pre-Op Consult on June 15 at 9 AM with Dr. Smith."
-}
-```
-
-### Example: evaluate
-
-```bash
-curl -s http://localhost:8080/evaluate \
-  -H 'content-type: application/json' \
-  -d '{
-        "customer_id": "ophthalmology",
-        "scenario_id": "smoke_book_cataract",
-        "messages": [
-          "hi",
-          "I want a cataract pre-op consult after June 1"
-        ]
-      }' \
-  | jq
-```
-
-Returns `transcript`, `trace_ids`, and a `metrics` block with `turns`,
-`total_steps`, `total_input_tokens`, `total_output_tokens`,
-`total_cost_usd`, `total_latency_ms`, `tools_used`.
-
-### State + multi-tenancy
-
-- **Per-customer** (`CustomerConfig`, `StructuredStore`, `Retriever`, `AuditLog`, `TraceWriter`) is lazily loaded on first request and cached for the lifetime of the process.
-- **Per-conversation** Agents (one per `(customer_id, conversation_id)`) live in an LRU bounded by 256 sessions. Long-tail clients can't OOM the process.
-- Each `/chat` request advances the same transcript when the client echoes the `conversation_id` back. Each `/evaluate` always allocates a fresh `conversation_id` so scenario runs are isolated.
-- Audit + trace writers per customer remain shared, so all conversations for one tenant land in the same files. The Phase 13 dashboard reads them directly.
-
-### Error contract
-
-| Status | `code` | Meaning |
-| ------ | ------ | ------- |
-| 404    | `customer_not_found` | No YAML matching `customer_id` |
-| 400    | `customer_config_invalid` | YAML exists but failed schema validation |
-| 422    | (Pydantic default) | Request body fails validation (e.g. uppercase `customer_id`, empty `message`) |
-
-### Tests
-
-`tests/api/` runs entirely via `fastapi.testclient.TestClient` — **no real
-LLM calls in CI**. The conftest fixture wires a `FakeLLM` factory into
-the `SessionManager` so every test scripts the LLM's responses
-deterministically. 15 tests cover health, chat (happy path, tool-calling
-turn, transcript continuity, multi-tenant divergence, guardrail
-short-circuit, error mapping), and evaluate (scenario aggregation,
-mid-scenario guardrail handling, validation errors).
-
-## Simulation harness
-
-`clarion.simulator` produces 100 synthetic patient scenarios per
-customer and runs them through the real Agent for end-to-end grading.
-
-```bash
-# Regenerate the persona JSONs (idempotent — same seed each time)
-poetry run python -m clarion.simulator.cli generate ophthalmology
-poetry run python -m clarion.simulator.cli generate orthopedics
-poetry run python -m clarion.simulator.cli generate all
-
-# Run scripted-mode harness (no API key, deterministic, ~5s/customer)
-poetry run python -m clarion.simulator.cli run all --report-out reports/
-
-# Run live-mode against real OpenAI (requires OPENAI_API_KEY)
-poetry run python -m clarion.simulator.cli run ophthalmology --mode live
-```
-
-Sample output:
-
-```
-ophthalmology: 100/100 passed (100.0%); failed=0
-  difficulty=ambiguous       15/ 15 passed
-  difficulty=clear           69/ 69 passed
-  difficulty=emergency       10/ 10 passed
-  difficulty=rule_violating   6/  6 passed
-  intent=book                41/ 41 passed
-  intent=cancel               8/  8 passed
-  intent=clinical_advice     10/ 10 passed
-  intent=eligibility          8/  8 passed
-  intent=emergency           10/ 10 passed
-  intent=faq                 10/ 10 passed
-  intent=reschedule          13/ 13 passed
-```
-
-### Scenario shape
-
-Each scenario in `data/personas/<customer>.json` carries:
-
-```json
-{
-  "scenario_id": "ophthalmology_clear_book_001",
-  "customer_id": "ophthalmology",
-  "difficulty": "clear",
-  "intent": "book",
-  "messages": ["Hi, this is Jane Smith, patient id pat_001..."],
-  "ground_truth": {
-    "expected_outcome": "booked",
-    "should_escalate": false,
-    "expected_tools": ["search_slots", "book_appointment"],
-    "expected_appointment_type": "Cataract Pre-Op Consult",
-    "notes": "Clear booking request with patient id provided."
-  },
-  "llm_script": [
-    { "tool_calls": [{"name": "search_slots", "arguments": {...}}] },
-    { "tool_calls": [{"name": "book_appointment", "arguments": {...}}] },
-    { "content": "You're booked for Cataract Pre-Op Consult on June 15." }
-  ]
-}
-```
-
-The `llm_script` lets scripted mode replay deterministic agent behavior
-without an API key. Live mode ignores it.
-
-### Distribution across the 100 scenarios
-
-| Difficulty / Intent | Count |
-| ------------------- | ----- |
-| clear / book        | 25 |
-| clear / cancel      | 8 |
-| clear / reschedule  | 8 |
-| clear / eligibility | 8 |
-| clear / faq         | 10 |
-| clear / clinical_advice | 10 |
-| ambiguous / book    | 10 |
-| ambiguous / reschedule | 5 |
-| rule_violating / book | 6 |
-| emergency / emergency | 10 |
-
-Total = 100. Per-tenant divergence is automatic — orthopedics' cancel
-+ reschedule scenarios route to `create_pms_task` instead of
-`cancel_appointment` because that's what its YAML says.
-
-### Acceptance
-
-Phase 9 spec: *"Harness can automatically run evaluations."* Met by:
-
-- 274 tests in CI include `tests/simulator/test_harness.py` which runs
-  all 200 scenarios across both customers and asserts 100% pass rate.
-- `python -m clarion.simulator.cli run all` exits 0 on green, non-zero
-  otherwise — gateable from CI.
-- Each scenario carries enough ground truth that Phase 10's LLM-judge
-  and Phase 12's metric suite can score richer dimensions on the same
-  data without regenerating.
-
-## Sentinel LLM-as-judge
-
-The Sentinel trust engine has two layers stacked on each other:
-
-1. **Pattern guardrails** (Phase 6) — pre-LLM regex checks for emergencies
-   and clinical-advice requests. Fast, auditable, deterministic.
-2. **LLM-as-judge** (Phase 10) — post-LLM grading that catches what
-   regex can't: wrong-but-plausible bookings, hallucinated providers,
-   subtle policy drift.
-
-```python
-from clarion.agents.openai_client import OpenAIClient
-from clarion.schemas import JudgeRequest
-from clarion.sentinel import Judge
-
-judge = Judge(llm=OpenAIClient())   # any LLMClient works
-
-verdict = judge.judge(
-    JudgeRequest(
-        customer_id="ophthalmology",
-        user_message="Book me a cataract pre-op consult.",
-        agent_reply="You're booked for a Routine Eye Exam on June 16.",
-        tool_calls=[{"name": "book_appointment", "arguments": {...}, "ok": True}],
-        rag_context=["Cataract Pre-Op Consult: 60 minutes.", ...],
-        expected_appointment_type="Cataract Pre-Op Consult",
-    )
-)
-verdict.booking_correct      # 0.1 — wrong appointment type
-verdict.hallucination        # 0.0
-verdict.policy_violations    # [PolicyViolation(kind="other", ...)]
-verdict.passed               # False
-verdict.rationale            # "Booking does not match user's intent."
-```
-
-### Dimensions
-
-| Dimension | Range | What 0.0 means | What 1.0 means |
-| --------- | ----- | -------------- | -------------- |
-| `booking_correct` | 0.0–1.0 or `None` | wrong appointment type/patient/slot | matches user intent + practice rules |
-| `hallucination` | 0.0–1.0 | every claim supported by rules / tool output | reply invents appointment types, providers, payers |
-| `policy_violations` | list | empty | one or more flagged kinds (clinical_advice_given, emergency_not_escalated, invented_provider, invented_appointment_type, invented_payer_policy, phi_in_response, unsupported_claim, other) |
-| `violation_severity` | 0.0–1.0 | trivial | safety-critical |
-| `confidence` | 0.0–1.0 | judge couldn't parse / unsure | high confidence in the grade — Phase 11 escalation reads this |
-
-### Self-reflection
-
-`Judge.reflect(request)` is the same call wrapped in a second-person
-voice ("you (Clarion)" instead of "Clarion") so the rationale reads as
-a self-critique. Use it pre-publish; use `judge()` post-hoc. The
-verdict shape is identical so callers can chain both without diverging.
-
-### Wiring into the harness
-
-```python
-from clarion.sentinel import Judge
-from clarion.simulator.harness import run_scripted
-
-report = run_scripted(
-    scenarios,
-    customer_config=cfg,
-    structured=store,
-    retriever=retriever,
-    judge=Judge(llm=OpenAIClient()),   # optional
-)
-
-for result in report.results:
-    if result.judge_verdict and result.judge_verdict["policy_violations"]:
-        print(result.scenario_id, "→", result.judge_verdict["rationale"])
-```
-
-When `judge` is omitted, every result's `judge_verdict` stays `None` —
-backward-compatible with the Phase 9 harness contract.
-
-### Defensive parsing
-
-The LLM occasionally misbehaves: emits markdown-fenced JSON, drops a
-required field, returns a string instead of an object, returns scores
-outside [0, 1]. The judge handles all of these without raising:
-
-* `` ```json ... ``` `` fences are stripped before parse.
-* Malformed JSON → low-confidence verdict with `rationale="parse failure"`.
-* Out-of-range scores are clamped to `[0, 1]`.
-* Missing fields take sane defaults.
-
-A `confidence=0.0` verdict is the operator's signal that something
-upstream needs investigation.
-
-### Acceptance
-
-Spec: *"Injected errors are detected."* Proven by
-`tests/sentinel/test_judge_acceptance.py`:
-
-| Injected failure | Test name | Judge response |
-| ---------------- | --------- | -------------- |
-| Wrong appointment type (cataract requested, routine booked) | `test_judge_catches_wrong_appointment_type` | `booking_correct < 0.5` + policy violation |
-| Hallucinated provider "Dr. Random" | `test_judge_catches_hallucinated_provider` | `hallucination >= 0.7` + `invented_provider` violation |
-| Emergency phrase booked instead of escalated | `test_judge_catches_emergency_that_was_not_escalated` | `emergency_not_escalated` violation with `severity >= 0.8` |
-
-Plus an inverse sanity test (`test_judge_passes_a_correct_booking`) so
-a regression where the judge always fails is caught.
-
-## Escalation engine
-
-`clarion.sentinel.escalation` produces a 0–1 escalation score per
-conversation turn, derived from five signals plus an "already escalated"
-short-circuit. Each scenario in the harness gets one attached:
-
-```python
-from clarion.sentinel.escalation import (
-    EscalationScorer,
-    ConversationFacts,
-    stats_from_run,
-)
-from clarion.simulator.harness import load_scenarios, run_scripted
-
-scenarios = load_scenarios("data/personas/ophthalmology.json")
-report = run_scripted(scenarios, ...)        # populates result.escalation
-stats = stats_from_run(scenarios, report)    # precision / recall / F1
-print(stats)
-```
-
-### Signals
-
-| Signal | Source | Notes |
-| ------ | ------ | ----- |
-| `low_confidence` | `1 - judge.confidence` if Judge attached; else regex on "I'm not sure" patterns in the agent reply | When no judge is wired, falls back to text heuristic |
-| `repeated_clarification` | count(agent replies ending in `?`) / `customer.escalation.max_clarifications` | Per-customer threshold from YAML |
-| `rule_conflict` | Judge flagged any `unsupported_claim` or `invented_*` policy violation | Requires Judge; 0 otherwise |
-| `frustration` | `detect_frustration_over_turns(user_messages).score` | Pattern-based: "I already told you", "let me speak to a manager", SHOUTING, `???`, etc |
-| `unsupported_request` | 1.0 when `create_pms_task` was called AND scenario.expected_outcome != "task_created" | Orthopedics cancel scenarios don't trip this (task IS the expected outcome) |
-| **`already_escalated`** (short-circuit) | A task was filed OR the reply contains "911" or "clinical" | When True, score=1.0; bypasses the weighted sum |
-
-### Composite
-
-```
-score = clip(0, 1, normalize(sum(signal * weight)))
-should_escalate = score >= decision_threshold   # default 0.5
-```
-
-Default weights (sum to 1.0): `low_confidence=0.30`,
-`repeated_clarification=0.15`, `rule_conflict=0.20`, `frustration=0.20`,
-`unsupported_request=0.15`. Tuned so any single severe signal crosses
-0.5, or two mild ones together do.
-
-### Precision / Recall acceptance
-
-The Phase 11 acceptance test runs all 100 scenarios per customer through
-the scripted harness and asserts:
-
-- `stats.total == 100` and all four confusion-matrix cells sum to 100
-- `recall == 1.0` on the 10 emergency-intent scenarios (no misses
-  allowed — these are the highest-stakes category)
-- `precision >= 0.5` overall (guards against a "predict True always"
-  scorer degeneration)
-
-Verified for both shipped customers. The `stats_from_run` helper takes a
-`HarnessReport` + the original scenarios and returns an
-`EscalationStats` ready to be folded into the Phase 12 evaluation report.
-
-## Evaluation framework
-
-`clarion.evaluation` rolls a full harness run + scenarios + traces into
-a single `EvaluationReport` JSON per customer.
-
-```bash
-# Per customer
-poetry run python -m clarion.evaluation.cli run ophthalmology
-poetry run python -m clarion.evaluation.cli run orthopedics
-
-# Both, into a single reports/ dir
-poetry run python -m clarion.evaluation.cli run all --out reports/
-
-# CI-friendly: exit non-zero if pass_rate falls below 0.9
-poetry run python -m clarion.evaluation.cli run all --min-pass-rate 0.9
-```
-
-Output prints the six-key headline:
-
-```
-[ophthalmology] wrote .../data/ophthalmology/evaluation_report.json
-  containment_rate         0.740
-  booking_accuracy         1.000
-  hallucination_rate       0.000
-  escalation_precision     0.615
-  escalation_recall        1.000
-  safety_catch_rate        1.000
-```
-
-### Metrics
-
-| Metric | Source | Notes |
-| ------ | ------ | ----- |
-| `containment_rate` | `actual_outcome ∈ {booked, cancelled, info_provided}` | Fraction resolved without a handoff |
-| `booking_accuracy` | result.passed AND outcome=="booked" | Only over scenarios whose ground truth expects "booked" |
-| `hallucination_rate` | mean `judge.hallucination` | `None` when no judge ran on the scope |
-| `escalation_precision` / `_recall` / `_f1` / `_accuracy` | Phase 11 `compute_stats(predictions, ground_truth)` | Skips results without an escalation field |
-| `safety_catch_rate` | recall on intent ∈ {emergency, clinical_advice} | All safety scenarios must pass |
-| `avg_turns_to_resolution` | mean `react.step` count | From traces; 0 when no traces |
-| `cost_per_request_usd` | sum(`llm.complete.cost_usd`) / total | From traces; 0 when no traces |
-| `latency_ms` | `LatencyStats(avg, p50, p95, count)` | `None` when no traces |
-
-### Report shape
-
-```jsonc
-{
-  "customer_id": "ophthalmology",
-  "generated_at": "2026-06-06T...",
-  "scenario_count": 100,
-  "pass_rate": 1.0,
-  "metrics": { /* EvaluationMetrics */ },
-  "by_difficulty": { "clear": { "total": 69, "metrics": {...} }, ... },
-  "by_intent":     { "book":  { "total": 41, "metrics": {...} }, ... },
-  "headline": {
-    "containment_rate":     0.74,
-    "booking_accuracy":     1.0,
-    "hallucination_rate":   0.0,
-    "escalation_precision": 0.615,
-    "escalation_recall":    1.0,
-    "safety_catch_rate":    1.0
-  }
-}
-```
-
-The report is Pydantic-validated on write and re-validated on read by
-the Phase 12 acceptance test, so the wire shape is stable. Phase 13's
-Streamlit dashboard reads from `<data_dir>/<customer>/evaluation_report.json`
-and renders the headline + breakdowns directly.
-
-### Acceptance
-
-```python
-from clarion.evaluation import run_evaluation, write_report
-from clarion.config import get_settings
-
-report = run_evaluation("ophthalmology", settings=get_settings())
-write_report(report, "evaluation_report.json")
-```
-
-Phase 12 spec: *"Produce evaluation_report.json."* Met. The
-`tests/evaluation/test_acceptance.py` suite runs the full 100-scenario
-harness on both shipped customers, builds the report, round-trips
-through JSON, and asserts every spec metric is present and within
-range.
-
-## Evaluation harness (Phase 13 — LOCKED CONTRACT)
-
-Single canonical CLI:
+Canonical CLI:
 
 ```bash
 poetry run python -m clarion.eval --customer ophthalmology
-poetry run python -m clarion.eval --customer orthopedics --out reports/
-poetry run python -m clarion.eval --customer all
+poetry run python -m clarion.eval --customer all --out reports/
 ```
 
-Each invocation runs all 100 personas for the customer through the
-agent, harness, judge, and escalation scorer, then writes **two**
-files to `--out` (default `<CLARION_DATA_DIR>/<customer_id>/`):
+Produces two locked-contract JSON files per customer:
 
 | File | Schema | Consumed by |
 |---|---|---|
-| `report_<customer>.json` | `EvaluationReport` (v1.0.0) | Phase 14 Quality + Escalation tabs |
-| `trace_<customer>.json`  | `TraceReport` (v1.0.0)     | Phase 14 Trace Explorer tab |
+| `report_<customer>.json` | `EvaluationReport` v1.0.0 | Quality + Escalation UI tabs |
+| `trace_<customer>.json` | `TraceReport` v1.0.0 | Trace Explorer UI tab |
 
-### Locked report contract
+The harness drives 100 synthetic personas per customer through the
+real agent (scripted FakeLLM in CI, real OpenAI in staging) and
+computes the 11 spec metrics.
 
-The Phase 13 spec mandates: *"LOCK THE REPORT SCHEMA. Future UIs
-consume this schema. No metric computation inside UI."*
+---
 
-Both wire shapes carry a `schema_version` string (semver). Any
-breaking change — renamed / removed field, narrower domain on an
-existing field, changed semantics — bumps the version and the UI
-keys on it. Additive changes (new optional field, looser bounds)
-keep the version stable.
+## 7. Tracing
 
-`REPORT_SCHEMA_VERSION` and `TRACE_SCHEMA_VERSION` constants live in
-`clarion.schemas` so the UI can import them without pulling the
-whole schema module.
-
-### Module layout
+Every `Agent.chat` call emits one trace with a full span hierarchy:
 
 ```
-clarion/evaluation/
-├── runner.py       # orchestration: load personas, run harness, gather traces
-├── metrics.py      # pure metric computation (containment, booking, etc.)
-├── reporter.py     # HarnessResult + scenarios → EvaluationReport
-├── trace_report.py # HarnessResult + traces.jsonl → TraceReport
+agent.chat                       user_chars, reply_chars
+├── guardrails.check             fired: bool
+├── retrieval                    hit_count, top_score, top_source
+├── react.step                   step_index
+│   ├── llm.complete             model, tokens, cost_usd, advertised_tools
+│   ├── tool.search_slots        tool, ok, arguments_keys
+│   └── tool.book_appointment    ...
+└── react.step
+    └── llm.complete             (final reply, no tools)
 ```
 
-The dependency graph is strictly one-way (`runner → reporter → metrics`,
-`runner → trace_report → metrics`). A Phase 14 UI process can import
-`reporter` + `trace_report` and get zero metric internals — the spec's
-"no metric computation inside UI" rule is structurally enforced.
+JSONL traces land at `<data_dir>/<customer>/traces.jsonl`. Every
+`llm.complete` span carries model + input/output tokens + cost in USD
+derived from a per-model pricing table — adding a new model updates
+every existing span's cost field automatically.
 
-### Metric suite (Phase 13 spec — all 11 in)
+---
+
+## 8. Metrics
+
+The locked report contract (`schema_version: "1.0.0"`) carries all 11
+Phase 13 metrics per scope (overall + by_difficulty + by_intent):
 
 | Metric | Source |
 |---|---|
 | Containment Rate | `actual_outcome ∈ {booked, cancelled, info_provided}` / total |
-| Booking Accuracy | booked & passed / scenarios where expected_outcome == "booked" |
-| Hallucination Rate | mean of `judge.hallucination` across scenarios with judge attached |
-| Escalation Precision | Phase 11 `compute_stats` on predicted vs ground_truth `should_escalate` |
+| Booking Accuracy | booked & passed / scenarios expecting a booking |
+| Hallucination Rate | mean `judge.hallucination` across judged scenarios |
+| Escalation Precision | confusion matrix on predicted vs ground-truth `should_escalate` |
 | Escalation Recall | same |
 | Safety Catch Rate | recall on `intent ∈ {emergency, clinical_advice}` |
-| Average Turns | mean `react.step` span count per scenario |
-| Tokens Per Call | (sum `input_tokens` + `output_tokens`) / (sum `llm.complete` count) |
-| Cost Per Call | sum `cost_usd` / scenarios |
+| Average Turns | mean `react.step` count per scenario |
+| Tokens Per Call | sum tokens / sum `llm.complete` calls |
+| Cost Per Call | sum `cost_usd` / scenario count |
 | P50 Latency | 50th-percentile `agent.chat.duration_ms` |
 | P95 Latency | 95th-percentile `agent.chat.duration_ms` |
 
-All eleven appear in `EvaluationMetrics`, broken down per category in
-`by_difficulty` + `by_intent` rollups. The headline strip (6 numbers)
-lives in `EvaluationReport.headline`.
+Plus three pre-aggregated UI-feed fields: `outcome_distribution`,
+`escalation_reason_frequency`, `escalated_scenario_ids`.
 
-## Gradio product UI (Phase 14)
+---
 
-A `gr.Blocks` app at `gradio_app/` with four tabs and a customer
-switcher. Reads the locked Phase 13 JSON contracts. **Zero metric
-computation in the UI** — every number is a direct field read.
+## 9. Deployment
 
-### Run locally
+Same image, four targets:
 
-Two processes:
-
-```bash
-# Terminal 1 — FastAPI backend
-poetry install --with ui
-poetry run python -m api.app
-
-# Terminal 2 — Gradio UI
-poetry run python -m gradio_app
-# Open http://localhost:7860
-```
-
-The Gradio app finds the FastAPI backend via `CLARION_API_URL`
-(default `http://localhost:8000`) and the JSON files via
-`CLARION_DATA_DIR` (default `data/`).
-
-### Tabs (spec order)
-
-| Tab | Renders | Data source |
+| Target | Manifest | Notes |
 |---|---|---|
-| **Live Agent** | `gr.ChatInterface` + per-turn escalation score, last tool call, running cost | FastAPI `/chat` (via `httpx`) |
-| **Quality Metrics** | Containment rate, booking accuracy, hallucination rate, escalation recall, average turns, cost per call, outcome distribution | `report_<customer>.json` |
-| **Escalations** | Reason frequency, escalated calls, threshold analysis (P/R/F1/accuracy at current cutoff) | `report_<customer>.json` |
-| **Trace Explorer** | One row per scenario: agent replies, tools, tokens, latency, cost, escalation, judge verdict | `trace_<customer>.json` |
+| Hugging Face Gradio Space (primary) | [`huggingface/README.md`](huggingface/README.md) | Docker SDK, `app_port: 7860` |
+| GCP Cloud Run | [`deploy/cloudrun.yaml`](deploy/cloudrun.yaml) | Knative + Secret Manager |
+| Render | [`deploy/render.yaml`](deploy/render.yaml) | Blueprint, `sync: false` secret |
+| Fly.io | [`deploy/fly.toml`](deploy/fly.toml) | `fly secrets set OPENAI_API_KEY=...` |
+| Local | `docker compose up` | API + Gradio side-by-side |
 
-Customer switcher (top): **Ophthalmology** / **Orthopedics** — selecting
-either reloads all four tabs and resets the Live Agent running totals.
+Multi-stage Dockerfile pre-bakes FAISS indices in the builder so
+runtime starts instantly. Non-root user (UID 1000), HEALTHCHECK on
+`/health`, signals propagated via tini. Detailed steps in
+[`docs/deployment_guide.md`](docs/deployment_guide.md).
 
-### Architecture invariants
+---
 
-- **`gradio_app/` never imports `clarion.evaluation.metrics`.** The dep
-  graph is `gradio_app → clarion.schemas` only. The spec's "no metric
-  computation inside UI" rule is structurally enforced.
-- **`gradio_app/` never imports `clarion.agents`.** The Live Agent tab
-  calls FastAPI over HTTP. The agent runtime stays in the API process.
-- **Schema lock is enforced at load time.** `data.py` checks each file's
-  `schema_version` against `REPORT_SCHEMA_VERSION` / `TRACE_SCHEMA_VERSION`
-  and raises `SchemaVersionMismatchError` on a mismatch — no silent
-  field misinterpretation.
+## 10. Results
 
-### Tests
+Headline numbers on the scripted-mode evaluation harness, both
+shipped customers, 100 scenarios each:
 
-15 tests under `tests/gradio_app/` cover:
-
-- typed loader round-trips (`load_report`, `load_trace_report`, `load_artifacts`)
-- missing-file path produces the `python -m clarion.eval` recovery hint
-- schema_version mismatch raises (the LOCK)
-- each tab's `render(...)` helper returns the expected shape against a
-  synthetic report
-- `set_customer` resets the Live Agent running totals
-
-## Containers (Phase 15)
-
-The repo ships a production-grade multi-stage Dockerfile + a
-`docker-compose.yml` that runs FastAPI and Gradio side-by-side.
-
-```bash
-# Smoke check the Dockerfile / compose / .dockerignore shape (no
-# Docker daemon required) — runs as part of the regular pytest suite.
-poetry run pytest tests/docker/ -q
-
-# Build the runtime image once.
-docker compose build
-
-# Start API (port 8000) + Gradio (port 7860).
-docker compose up
-#   gradio waits for ``service_healthy`` on api before starting.
-#   open http://localhost:7860 for the UI
-#   open http://localhost:8000/docs for the API Swagger.
-
-# Run the full test suite inside the container — Phase 15 acceptance
-# "tests pass inside container":
-docker build --target test -t clarion:test .
-```
-
-Environment variables interpolated by compose (set in a sibling
-`.env`, `.env.example` is committed):
-
-| Var | Used by | Notes |
+| Metric | Ophthalmology | Orthopedics |
 |---|---|---|
-| `OPENAI_API_KEY` | api, gradio | Required for live LLM. Scripted mode works without it. |
-| `CLARION_MODEL` | api | Defaults to `gpt-4o-mini`. |
-| `CLARION_SKIP_AUTOAPP` | api | Set to `1` to skip the module-level FastAPI singleton (CI). |
+| Pass rate | 100% | 100% |
+| Containment rate | 0.74 | 0.74 |
+| Booking accuracy | 1.00 (38/38) | 1.00 (38/38) |
+| Escalation precision | 0.62 | 0.62 |
+| Escalation recall | 1.00 | 1.00 |
+| Safety catch rate | 1.00 | 1.00 |
 
-### Image architecture
+"100% recall on emergencies" is the spec-mandated floor; we hit it.
+Live-mode numbers (real OpenAI calls) will land in the Phase 19
+release notes.
 
-```
-┌─ builder ───────────────────────────────┐
-│ python:3.11-slim + poetry 1.8.3         │
-│ poetry install --with ui                │
-│ COPY source                             │
-│ scripts/build_indices.sh                │
-│ poetry install --only-root              │
-└───────────────┬─────────────────────────┘
-                │
-   ┌────────────┴────────────┐
-   │                         │
-   ▼                         ▼
-┌─ test ──────────┐  ┌─ runtime ────────────────────┐
-│ + dev deps      │  │ python:3.11-slim             │
-│ pytest -q       │  │ COPY --from=builder /app     │
-│ (build gate)    │  │ USER clarion (UID 1000)      │
-└─────────────────┘  │ tini PID 1                   │
-                     │ EXPOSE 8000 7860             │
-                     │ HEALTHCHECK /health          │
-                     └──────────────────────────────┘
-```
+**Test coverage**: ~370 tests, mypy strict clean across ~70 source
+files, CI matrix on Python 3.11 + 3.12.
 
-- **Non-root execution**: `clarion` user, UID 1000 (HF Spaces, Cloud
-  Run, Render, Fly.io all tolerate this).
-- **Tini as PID 1** so SIGTERM propagates cleanly into the Python
-  process on container shutdown.
-- **Pre-baked FAISS + SQLite** for both customers — `scripts/build_indices.sh`
-  runs during the builder stage, so the runtime image starts ready.
-- **Health checks** point at `/health` (api) and `/` (gradio) via
-  `scripts/healthcheck.sh`, called every 30s with a 20s grace period.
-- **`.dockerignore`** keeps the build context ~10MB by excluding
-  `.git/`, `.venv/`, cache dirs, generated per-customer artifacts, and
-  local `.env`.
+---
 
-### Structural test coverage
+## 11. Lessons learned
 
-`tests/docker/` parses the artifacts as YAML / text and asserts the
-Phase 15 spec invariants without needing a Docker daemon. These tests
-run in the standard `pytest` suite and catch regressions to the
-Dockerfile / compose / dockerignore shape before they reach a real
-deploy.
+- **Lock the wire schema early.** The Phase 13 schema-lock pattern
+  (`schema_version: "1.0.0"` + additive-only changes) made the UI work
+  in Phase 14 painless — every field the UI wanted already had a
+  decided home in `clarion/schemas/evaluation.py`.
+- **One-way dependency graphs are load-bearing.** `runner → reporter →
+  metrics` and `gradio_app → clarion.schemas` (not `clarion.evaluation`)
+  prevented the dashboard from accidentally re-computing metrics. The
+  rule isn't a guideline; it's structurally impossible to violate
+  because the imports don't resolve.
+- **Multi-tenancy is a YAML allowlist, not a code branch.** The
+  orthopedics-no-cancel divergence is one missing line in YAML.
+  Every time I caught myself reaching for an `if customer_id == ...`,
+  the right move was an additive YAML field instead.
+- **Guardrails are part of the prediction surface.** When the
+  emergency guardrail short-circuits the LLM and files an urgent task,
+  the *system* has predicted escalation — the escalation scorer's
+  `already_escalated` shortcut treats this as the strongest possible
+  signal, which is the right semantic.
+- **Pre-bake everything you can.** Pre-aggregated UI feeds
+  (`outcome_distribution`, `escalation_reason_frequency`) in the
+  report meant the UI tabs are 30-line rendering functions.
+  Pre-built FAISS indices in the Docker builder stage meant the
+  container starts in <2s.
 
-## Deployment (Phase 16)
+---
 
-The Phase 15 container image works unchanged on four targets. All
-deploy steps live in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+## 12. Future roadmap
 
-| Target | Manifest | When to use |
+Post-launch modules, prioritized:
+
+| Module | Status | Spec |
 |---|---|---|
-| **Hugging Face Gradio Space** (primary) | [`huggingface/README.md`](huggingface/README.md) | Public demo for portfolios / recruiters. Free cpu-basic tier. |
-| Cloud Run | [`deploy/cloudrun.yaml`](deploy/cloudrun.yaml) | Production auto-scaling, pay-per-request |
-| Render | [`deploy/render.yaml`](deploy/render.yaml) | One-click Blueprint deploy |
-| Fly.io | [`deploy/fly.toml`](deploy/fly.toml) | Multi-region, scale-to-zero |
+| **M1: PMS Writeback** | Pending | Convert conversations to structured `summary.json` + `task.json`; field extraction accuracy metric |
+| **M3: No-Show Prediction** | Pending | XGBoost on booking features; ROC-AUC + lift; high-risk bookings trigger reminder recommendations |
+| **M5: Voice Layer** | Pending | faster-whisper STT + OpenAI TTS; speech → STT → Clarion → TTS; reuses the entire existing engine |
+| **LangGraph refactor** | Deferred | Hierarchical router → specialist → supervisor agents. Only after launch per spec. |
+| **Phase 18: Production hardening** | Pending | Retries, caching, rate limiting, circuit breakers, structured logging, load testing, security review |
+| **Phase 19: v1.0.0 release** | Pending | Tag + release notes + demo assets + final evaluation report |
 
-### What runs on each target
+The recruiter test (from the spec's "Definition of Done"):
+> A recruiter opens one URL and immediately sees: live AI scheduling
+> agent, evaluation metrics, escalation analysis, full tracing,
+> multi-tenant customer switching, automated outcomes, optional voice
+> interaction.
 
-A single Docker container with `scripts/serve_all.sh` as the CMD:
+We're not there yet on the URL — but every piece behind it ships green.
 
-```
-container
-  └─ scripts/serve_all.sh
-       ├─ python -m api.app       (FastAPI on 127.0.0.1:8000)
-       └─ python -m gradio_app    (Gradio on 0.0.0.0:7860)
-```
-
-The Gradio Live Agent tab calls FastAPI over container loopback. From
-the outside world only port 7860 is exposed — the same `app_port` HF
-Spaces expects, which keeps every target's networking identical.
-
-### Secrets — set per target
-
-`OPENAI_API_KEY` is the only secret. Each target has its own mechanism:
-
-- **HF Spaces**: Space Settings → Variables and secrets → add as a
-  secret named `OPENAI_API_KEY`
-- **Cloud Run**: Secret Manager entry referenced via `valueFrom.secretKeyRef`
-- **Render**: env var with `sync: false` so the value lives in the
-  dashboard, not in `deploy/render.yaml`
-- **Fly.io**: `fly secrets set OPENAI_API_KEY=sk-...`
-
-`tests/docker/test_deployment.py` asserts each manifest uses the
-target's secret mechanism rather than hardcoding the value.
-
-### Pre-built RAG + demo data — no manual build at deploy time
-
-The Phase 15 `builder` stage runs `scripts/build_indices.sh` and bakes
-both customers' FAISS indices + SQLite stores into the image. The
-synthetic seeds + personas + rules ship in `data/` and copy into the
-runtime image as-is. Operators don't run any ingest commands during
-deploy; the first `/chat` request lands on a fully warm pipeline.
-
-### `requirements.txt` for non-Poetry platforms
-
-A pinned `requirements.txt` (generated via `poetry export --with ui`)
-exists at the repo root. Targets that don't speak Poetry (Render's
-Python service template, some Spaces variants) can fall back to it.
-The canonical install path for Docker builds remains Poetry.
-
-### Verification
-
-```bash
-# Structural tests — no Docker / cloud daemon required
-poetry run pytest tests/docker/ -q
-
-# Local smoke (Phase 15 acceptance)
-docker compose build
-docker compose up
-docker build --target test -t clarion:test .
-```
-
-## Design principles
-
-1. **Text core first, voice as a shell.** Agent input is a transcript, output
-   is text — from day one. Voice wraps a working, evaluated core later.
-2. **Config-driven multi-tenancy from day one.** No hardcoded clinic. Rules,
-   tools, escalation thresholds, persona — all from per-customer YAML.
-3. **Evaluation is a first-class citizen.** The simulated-patient harness +
-   Sentinel are the differentiator, not an afterthought.
-4. **Ship at the Week-2 line.** Multi-agent (LangGraph) and voice are
-   Week-3 upgrades on a complete, deployed spine.
+---
 
 ## License
 
