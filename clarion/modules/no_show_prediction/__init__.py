@@ -26,6 +26,12 @@ from clarion.modules.no_show_prediction.dataset import (
     encode_row,
     generate_dataset,
 )
+from clarion.modules.no_show_prediction.trainer import (
+    MODEL_VERSION,
+    TrainResult,
+    persist,
+    train,
+)
 
 __all__ = [
     "AGE_BANDS",
@@ -33,8 +39,12 @@ __all__ = [
     "DAYS_OF_WEEK",
     "Dataset",
     "FEATURE_COLUMNS",
+    "MODEL_VERSION",
     "NUMERIC_FEATURES",
     "PAYERS",
+    "TrainResult",
     "encode_row",
     "generate_dataset",
+    "persist",
+    "train",
 ]

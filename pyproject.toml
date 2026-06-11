@@ -20,6 +20,9 @@ openai = "^1.40"        # optional embedder (text-embedding-3-small)
 # Phase 8 — FastAPI service
 fastapi = "^0.115"
 uvicorn = { extras = ["standard"], version = "^0.30" }
+# Module M3 — no-show prediction trainer + predictor
+xgboost = "^2.1"
+joblib = "^1.4"
 
 [tool.poetry.group.ui.dependencies]
 # Phase 14 — Gradio product UI. Kept in its own optional group so the
