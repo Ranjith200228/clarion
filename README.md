@@ -315,7 +315,7 @@ per customer:
 modules:
   pms_writeback: true       # M1: shipped
   no_show_prediction: true  # M3: shipped
-  voice: false              # M5: pending
+  voice: true               # M5: shipped
 ```
 
 The agent never imports modules; modules read completed transcripts and
@@ -419,6 +419,83 @@ the trainer's `MODEL_VERSION` ("no_show_v1" today) is the audit
 handle — every `NoShowPrediction` stamps it so production
 predictions trace back to a specific trained bundle.
 
+### M5: Voice Layer
+
+Speech in → STT → the same Clarion agent that powers `/chat` → TTS
+→ speech out. Voice is genuinely a layer over the existing engine,
+not a parallel control path — every guardrail, escalation, audit,
+and trace already wired into the agent applies to voice turns too.
+
+**Round trip.**
+
+```
+inbound audio bytes  ──► Transcriber.transcribe   ──► text
+text                 ──► Agent.chat                ──► assistant text
+assistant text       ──► Speaker.synthesize        ──► outbound audio bytes
+                                                       + per-stage latency_ms
+```
+
+**Adapter Protocols.** STT and TTS sit behind one-method
+Protocols (`TranscriberProtocol`, `SpeakerProtocol`) so deployments
+can mix and match. Two implementations of each ship today:
+
+| Role | Production | Test stub |
+|---|---|---|
+| STT | `FasterWhisperTranscriber` (base.en, int8 CPU) | `EchoTranscriber` (UTF-8 echo) |
+| TTS | `OpenAITtsSpeaker` (tts-1, alloy, mp3) | `SineWaveSpeaker` (440 Hz WAV, ~50 ms/word) |
+
+faster-whisper is lazy-imported so customers with `modules.voice =
+false` never pay the ~1 GB dep cost. A missing optional dep raises
+a clear error at `__init__` with a fix recipe.
+
+**Endpoint.** `POST /voice/turn` accepts `VoiceTurnRequest`
+(base64 audio + `AudioMetadata` + `customer_id` + `session_id`)
+and returns `VoiceTurnResponse` (transcription + assistant text +
+base64 audio + per-stage latencies). Boundary validation is strict:
+
+| Code | Response |
+|---|---|
+| 200 | Round-trip succeeded |
+| 400 `bad_audio_b64` | `audio_b64` is not valid base64 |
+| 400 `audio_length_mismatch` | Decoded payload length disagrees with `audio_metadata.n_bytes` |
+| 404 `customer_not_found` | Unknown `customer_id` |
+| 503 `voice_not_configured` | Deployment didn't inject a `VoiceOrchestrator` |
+
+**Why base64 over JSON, not multipart.** Existing API middleware
+(auth, rate limits, log scrubbers) keeps working unchanged — the
+audio body is opaque to every layer until the route handler
+decodes it. `AudioMetadata.n_bytes` is then compared against the
+decoded length to catch truncated uploads and a class of
+metadata-vs-payload tamper attacks.
+
+**Session continuity.** `session_id` is treated as the
+conversation id, so a session can mix voice and text turns and the
+rolling transcript stays coherent. Multi-turn voice sessions must
+reuse the same `session_id` (same contract as `conversation_id`
+on `/chat`).
+
+**Deploy notes.** Voice is opt-in per deployment. To turn it on,
+inject a `VoiceOrchestrator` into `create_app`:
+
+```python
+from clarion.modules.voice import (
+    FasterWhisperTranscriber,
+    OpenAITtsSpeaker,
+    VoiceOrchestrator,
+)
+from api.app import create_app
+
+orch = VoiceOrchestrator(
+    transcriber=FasterWhisperTranscriber(model_size="base.en"),
+    speaker=OpenAITtsSpeaker(api_key=os.environ["OPENAI_API_KEY"]),
+)
+app = create_app(voice_orchestrator=orch)
+```
+
+The route is mounted unconditionally; without injection it
+responds 503 with a clear `voice_not_configured` code so the
+contract is uniform across deployments.
+
 ## 12. Future roadmap
 
 Post-launch modules, prioritized:
@@ -427,7 +504,7 @@ Post-launch modules, prioritized:
 |---|---|---|
 | **M1: PMS Writeback** | ✅ shipped | Convert conversations to structured `summary.json` + `task.json`; field extraction accuracy metric |
 | **M3: No-Show Prediction** | ✅ shipped | XGBoost on booking features; held-out ROC-AUC + top-decile lift folded into the report |
-| **M5: Voice Layer** | Pending | faster-whisper STT + OpenAI TTS; speech → STT → Clarion → TTS; reuses the entire existing engine |
+| **M5: Voice Layer** | ✅ shipped | faster-whisper STT + OpenAI TTS; speech → STT → Clarion → TTS; reuses the entire existing engine |
 | **LangGraph refactor** | Deferred | Hierarchical router → specialist → supervisor agents. Only after launch per spec. |
 | **Phase 18: Production hardening** | Pending | Retries, caching, rate limiting, circuit breakers, structured logging, load testing, security review |
 | **Phase 19: v1.0.0 release** | Pending | Tag + release notes + demo assets + final evaluation report |
