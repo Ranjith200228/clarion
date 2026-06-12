@@ -61,7 +61,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 RUN bash scripts/build_indices.sh
 
 # Install the project itself last so ``clarion`` is importable from the venv.
-RUN poetry install --with ui --only-root
+RUN poetry install --only-root
 
 # =========== test ===========
 # ``docker build --target test`` runs pytest inside the container.
