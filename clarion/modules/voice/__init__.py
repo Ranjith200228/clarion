@@ -18,9 +18,17 @@ from clarion.modules.voice.stt import (
     FasterWhisperTranscriber,
     TranscriberProtocol,
 )
+from clarion.modules.voice.tts import (
+    OpenAITtsSpeaker,
+    SineWaveSpeaker,
+    SpeakerProtocol,
+)
 
 __all__ = [
     "EchoTranscriber",
     "FasterWhisperTranscriber",
+    "OpenAITtsSpeaker",
+    "SineWaveSpeaker",
+    "SpeakerProtocol",
     "TranscriberProtocol",
 ]
