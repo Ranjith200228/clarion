@@ -8,6 +8,37 @@ this project follows [Semantic Versioning](https://semver.org/).
 
 Work on the 1.1 line. Future entries land here until the next tag.
 
+### Added — LangGraph multi-agent backend
+- New `clarion/multiagent/` package: a hierarchical router →
+  specialist → supervisor backend built on LangGraph as an
+  additive parallel runtime to the single-`Agent` ReAct loop.
+- `IntentRouter` Protocol with `LLMIntentRouter` (gpt-4o-mini,
+  structured tool-call output) and `HeuristicIntentRouter`
+  (deterministic regex; zero LLM cost for tests). Parse failures
+  fall back to `info`, never `emergency`.
+- Five `Specialist` nodes (`Booking`, `Eligibility`, `Info`,
+  `Cancel`, `Emergency`), each scoped to a tool subset via a
+  per-call `CustomerConfig.model_copy(update={"enabled_tools": ...})`.
+  `EmergencySpecialist` short-circuits without an LLM call.
+- `Supervisor` node — rule-based three-way decision tree
+  (finish / route / escalate). Wraps the same `EscalationScorer`
+  the single-`Agent` backend uses so escalation rates stay
+  consistent across backends.
+- `MultiAgentRunner` exposing an `Agent`-compatible
+  `chat(str) -> str` so the API route handlers don't branch on
+  backend.
+- Per-customer `use_multiagent: bool = False` on
+  `CustomerConfig`. `SessionManager._build_agent` picks the
+  backend at session creation.
+- Adds `langgraph ^0.2` (pulls `langchain-core` + `langsmith`
+  transitively; ~6 MB unpacked).
+
+### Verified
+- 548/548 tests green (29 new multi-agent tests covering router,
+  specialists, supervisor decision tree, and full graph
+  traversal with `FakeLLM`).
+- mypy strict + ruff clean across 97 source files.
+
 ## [1.0.0] — 2026-06-12
 
 The first stable release. Clarion is a configurable multi-agent

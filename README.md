@@ -582,6 +582,89 @@ controls each maps to, and an honest gap list. The TL;DR — this
 is a healthcare-vertical demonstration, not a HIPAA-certified
 product; the doc names the work needed to close that gap.
 
+## LangGraph multi-agent backend
+
+The v1.0.0 single-`Agent` ReAct backend is the default for every
+deployment. After launch, a second backend lives alongside it:
+a **hierarchical multi-agent graph** built on LangGraph. Routing,
+specialization, and supervision become explicit nodes instead of
+implicit phases of one ReAct loop.
+
+```
+START -> router -> {booking | eligibility | info | cancel | emergency}
+                                       |
+                                       v
+                                   supervisor
+                                       |
+        finish / escalate ------------+----------> END
+              route ------------------+----> back to router
+```
+
+- **`IntentRouter`** (`clarion/multiagent/router.py`) — small,
+  fast classifier mapping the user's message to exactly one
+  specialist queue. Ships in two flavors: `LLMIntentRouter`
+  (gpt-4o-mini, structured tool-call output) for production and
+  `HeuristicIntentRouter` (deterministic regex, zero LLM cost)
+  for tests + offline smoke. The LLM router falls back to `info`
+  on parse error — never to `emergency`, because false-positive
+  escalations train ops to ignore the signal.
+- **Specialists** (`clarion/multiagent/specialists/`) — five
+  focused nodes (`Booking`, `Eligibility`, `Info`, `Cancel`,
+  `Emergency`) each scoped to a tool subset of the customer's
+  enabled tools via a per-call `CustomerConfig.model_copy(update=
+  {"enabled_tools": ...})`. The shared `Specialist` base class
+  handles the LangGraph plumbing; concrete specialists are ~10
+  lines of declarative config plus persona. `EmergencySpecialist`
+  is the only one that overrides `__call__` — no LLM, no tools,
+  deterministic 911 reply.
+- **Supervisor** (`clarion/multiagent/supervisor.py`) — runs
+  after each specialist. Three decisions: **finish** (default),
+  **route** back to the classifier for a different specialist
+  (bounded by `max_visits` so it can't bounce forever), or
+  **escalate** when the specialist already flagged it OR the
+  visit count exceeds the cap OR the shared `EscalationScorer`
+  flags the assistant turn. Rule-based, not LLM-backed — the
+  decision is small (3 options), the cost matters, and the
+  rules are auditable.
+
+**The shared trust engine still applies.** Guardrails, PHI
+redaction, audit log, and the same `EscalationScorer` used by the
+single-Agent backend — all of it sits at the runtime boundary, so
+escalation rates stay consistent across backends when you toggle.
+
+**Per-customer toggle.** Set `use_multiagent: true` in the
+customer YAML to switch that tenant over:
+
+```yaml
+# configs/ophthalmology.yaml
+use_multiagent: true     # opt-in; default is false
+```
+
+`SessionManager._build_agent` reads the flag at session creation
+and instantiates either `Agent` (single ReAct loop) or
+`MultiAgentRunner` (the graph above). Both satisfy the same
+duck-type — `chat(str) -> str` + `last_trace_id: str` — so the
+`/chat` and `/voice/turn` route handlers don't branch on backend.
+
+**When to use each.** The single-`Agent` backend is the right
+default — fewer moving parts, faster cold start, lower
+latency-per-turn because there's no separate classifier hop. The
+multi-agent backend earns its keep when:
+
+- You want specialist-scoped tool advertisement (Info never sees
+  `book_appointment`, Booking never sees `check_eligibility` —
+  prompt-injection's blast radius shrinks).
+- You're A/B-ing against tighter persona constraints per intent
+  (e.g. tuning the cancellation persona without affecting
+  booking behavior).
+- A specialist needs different guardrails or a different LLM
+  later (we can swap in a fine-tuned model behind `BookingSpecialist`
+  without touching the rest).
+
+The Phase 14 dashboard renders both backends without modification
+— traces nest under one `agent.chat` (or `multiagent.chat`) root,
+and the locked `EvaluationReport` schema is unchanged.
+
 ## 12. Future roadmap
 
 Post-launch modules, prioritized:
@@ -591,9 +674,9 @@ Post-launch modules, prioritized:
 | **M1: PMS Writeback** | ✅ shipped | Convert conversations to structured `summary.json` + `task.json`; field extraction accuracy metric |
 | **M3: No-Show Prediction** | ✅ shipped | XGBoost on booking features; held-out ROC-AUC + top-decile lift folded into the report |
 | **M5: Voice Layer** | ✅ shipped | faster-whisper STT + OpenAI TTS; speech → STT → Clarion → TTS; reuses the entire existing engine |
-| **LangGraph refactor** | Deferred | Hierarchical router → specialist → supervisor agents. Only after launch per spec. |
+| **LangGraph refactor** | ✅ shipped | Hierarchical router → specialist → supervisor agents; opt-in per customer via `use_multiagent: true` |
 | **Phase 18: Production hardening** | ✅ shipped | Retries, caching, rate limiting, circuit breakers, structured logging, load testing, [security review](docs/security_review.md) |
-| **Phase 19: v1.0.0 release** | Pending | Tag + release notes + demo assets + final evaluation report |
+| **Phase 19: v1.0.0 release** | ✅ shipped | Tagged at [v1.0.0](https://github.com/Ranjith200228/clarion/releases/tag/v1.0.0) on 2026-06-12 |
 
 The recruiter test (from the spec's "Definition of Done"):
 > A recruiter opens one URL and immediately sees: live AI scheduling
