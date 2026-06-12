@@ -4,6 +4,10 @@ All notable changes to **Clarion** are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+Work on the 1.1 line. Future entries land here until the next tag.
+
 ## [1.0.0] — 2026-06-12
 
 The first stable release. Clarion is a configurable multi-agent

@@ -11,4 +11,8 @@ def test_package_importable() -> None:
 
 def test_version_string() -> None:
     assert isinstance(clarion.__version__, str)
-    assert clarion.__version__ == "1.0.0"
+    # On the 1.1.x development line. Released tags pin a stable
+    # version; this assertion just confirms the marketing version
+    # is exposed and follows the dev-suffix convention.
+    assert clarion.__version__.startswith("1.")
+    assert "dev" in clarion.__version__
