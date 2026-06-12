@@ -15,6 +15,11 @@ Public surface (built up across commits):
   MultiAgentRunner                                       (commit 5)
 """
 
+from clarion.multiagent.router import (
+    HeuristicIntentRouter,
+    LLMIntentRouter,
+    Router,
+)
 from clarion.multiagent.state import (
     MultiAgentState,
     SpecialistIntent,
@@ -23,7 +28,10 @@ from clarion.multiagent.state import (
 )
 
 __all__ = [
+    "HeuristicIntentRouter",
+    "LLMIntentRouter",
     "MultiAgentState",
+    "Router",
     "SpecialistIntent",
     "SupervisorDecision",
     "initial_state",
