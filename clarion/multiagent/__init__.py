@@ -20,6 +20,15 @@ from clarion.multiagent.router import (
     LLMIntentRouter,
     Router,
 )
+from clarion.multiagent.specialists import (
+    EMERGENCY_REPLY,
+    BookingSpecialist,
+    CancelSpecialist,
+    EligibilitySpecialist,
+    EmergencySpecialist,
+    InfoSpecialist,
+    Specialist,
+)
 from clarion.multiagent.state import (
     MultiAgentState,
     SpecialistIntent,
@@ -28,10 +37,17 @@ from clarion.multiagent.state import (
 )
 
 __all__ = [
+    "BookingSpecialist",
+    "CancelSpecialist",
+    "EMERGENCY_REPLY",
+    "EligibilitySpecialist",
+    "EmergencySpecialist",
     "HeuristicIntentRouter",
+    "InfoSpecialist",
     "LLMIntentRouter",
     "MultiAgentState",
     "Router",
+    "Specialist",
     "SpecialistIntent",
     "SupervisorDecision",
     "initial_state",
