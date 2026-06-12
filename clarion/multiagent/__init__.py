@@ -20,6 +20,7 @@ from clarion.multiagent.router import (
     LLMIntentRouter,
     Router,
 )
+from clarion.multiagent.runner import MultiAgentRunner
 from clarion.multiagent.specialists import (
     EMERGENCY_REPLY,
     BookingSpecialist,
@@ -53,6 +54,7 @@ __all__ = [
     "HeuristicIntentRouter",
     "InfoSpecialist",
     "LLMIntentRouter",
+    "MultiAgentRunner",
     "MultiAgentState",
     "Router",
     "Specialist",

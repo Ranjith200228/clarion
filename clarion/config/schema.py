@@ -96,6 +96,15 @@ class CustomerConfig(BaseModel):
     # the engine grows support for it.
     modules: dict[str, bool] = Field(default_factory=dict)
 
+    # Per-customer agent backend toggle.
+    # False -> single-Agent ReAct loop (the Phase 5 path).
+    # True  -> LangGraph hierarchical multi-agent runtime (router ->
+    #          specialist -> supervisor) — same trust engine, same
+    #          tool registry, same EvaluationReport contract.
+    # Default off so the v1.0.0 backend stays the default for every
+    # existing deployment; opt-in per tenant.
+    use_multiagent: bool = Field(default=False)
+
     @field_validator("enabled_tools")
     @classmethod
     def _unique_tools(cls, v: list[ToolName]) -> list[ToolName]:

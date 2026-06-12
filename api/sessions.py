@@ -28,12 +28,18 @@ from clarion.agents.agent import Agent
 from clarion.agents.llm import LLMClient
 from clarion.agents.openai_client import OpenAIClient
 from clarion.config import CustomerConfig, Settings, load_customer
+from clarion.multiagent import MultiAgentRunner
 from clarion.observability import TraceWriter, new_trace_id
 from clarion.pipelines.structured import StructuredStore
 from clarion.rag.builder import load_customer_retriever
 from clarion.rag.retriever import Retriever
 from clarion.sentinel import AuditLog
 from clarion.tools.base import ToolContext
+
+# Both backends satisfy the same minimal duck-type: a ``chat(str) ->
+# str`` method and a ``last_trace_id: str`` attribute. The route
+# handlers in api/routes/chat.py only read those.
+AgentBackend = Agent | MultiAgentRunner
 
 log = logging.getLogger(__name__)
 
@@ -68,7 +74,7 @@ class SessionManager:
     max_sessions: int = 256
 
     _customers: dict[str, CustomerResources] = field(default_factory=dict)
-    _sessions: OrderedDict[tuple[str, str], Agent] = field(default_factory=OrderedDict)
+    _sessions: OrderedDict[tuple[str, str], AgentBackend] = field(default_factory=OrderedDict)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     # ---------- customer resources ----------
@@ -109,10 +115,12 @@ class SessionManager:
 
     def get_or_create_session(
         self, customer_id: str, conversation_id: str | None
-    ) -> tuple[str, Agent]:
-        """Return ``(conversation_id, Agent)``. Creates the session if it
-        doesn't exist; allocates a new conversation_id if the caller didn't
-        provide one."""
+    ) -> tuple[str, AgentBackend]:
+        """Return ``(conversation_id, AgentBackend)``. Creates the session if
+        it doesn't exist; allocates a new conversation_id if the caller
+        didn't provide one. The backend (single-Agent vs LangGraph
+        MultiAgentRunner) is picked per customer via
+        ``CustomerConfig.use_multiagent``."""
         if conversation_id is None:
             conversation_id = new_conversation_id()
         key = (customer_id, conversation_id)
@@ -138,8 +146,20 @@ class SessionManager:
         self._customers[customer_id] = cached
         return cached
 
-    def _build_agent(self, resources: CustomerResources) -> Agent:
+    def _build_agent(self, resources: CustomerResources) -> AgentBackend:
         ctx = ToolContext(customer=resources.config, structured=resources.store)
+        if resources.config.use_multiagent:
+            # LangGraph backend — same trust engine (the supervisor wraps
+            # the shared EscalationScorer), same tool registry (each
+            # specialist scopes via model_copy(update=enabled_tools)),
+            # same EvaluationReport contract. Tracer is shared too so
+            # dashboards render the new graph for free.
+            return MultiAgentRunner(
+                customer=resources.config,
+                llm=self.llm_factory(),
+                ctx=ctx,
+                tracer=None,  # per-conversation tracer is created per-turn
+            )
         agent = Agent(
             customer=resources.config,
             llm=self.llm_factory(),
