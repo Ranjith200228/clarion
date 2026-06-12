@@ -13,6 +13,7 @@ Public surface (built up across commits):
   VoiceOrchestrator                                               (commit 4)
 """
 
+from clarion.modules.voice.orchestrator import TurnLatencies, VoiceOrchestrator
 from clarion.modules.voice.stt import (
     EchoTranscriber,
     FasterWhisperTranscriber,
@@ -31,4 +32,6 @@ __all__ = [
     "SineWaveSpeaker",
     "SpeakerProtocol",
     "TranscriberProtocol",
+    "TurnLatencies",
+    "VoiceOrchestrator",
 ]
