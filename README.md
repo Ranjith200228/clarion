@@ -2,6 +2,11 @@
 
 **Configurable Multi-Agent Voice Automation Platform with Sentinel Trust Engine.**
 
+**v1.0.0** · 529 tests green · mypy strict · ruff clean ·
+[CHANGELOG](CHANGELOG.md) ·
+[security review](docs/security_review.md) ·
+[final eval reports](reports/v1.0.0/README.md)
+
 Clarion is a config-driven AI platform for deploying voice automation
 to new customer verticals. Healthcare scheduling is the **demonstration
 vertical**, not the product — the architecture treats vertical-specific
@@ -10,15 +15,59 @@ a new vertical is a one-day job, not an engineering project.
 
 > **Honesty note.** This is a prototype on synthetic, non-PHI data.
 > Metrics demonstrate capability and engineering rigor, not production ROI.
+> Scope and gaps are named in [`docs/security_review.md`](docs/security_review.md).
 
 ![Architecture diagram](docs/architecture.png)
+
+## What to read first
+
+If you have **five minutes**, read in this order:
+
+1. **[`docs/discovery.md`](docs/discovery.md)** — the FDE artifact
+   framing the customer problem, why a generic voice bot fails it,
+   and how Clarion's three layers (config, agent, sentinel) map
+   to the requirements.
+2. **[`reports/v1.0.0/README.md`](reports/v1.0.0/README.md)** —
+   the locked-schema evaluation report for both shipped customers.
+   100-scenario corpus per customer, headline metrics in one table.
+3. **[`CHANGELOG.md`](CHANGELOG.md)** — what shipped, with
+   pointers into the code.
+
+If you have **fifteen minutes**, add:
+
+4. **[`docs/security_review.md`](docs/security_review.md)** —
+   STRIDE-shaped audit; the gaps list is the load-bearing part.
+5. **[`clarion/agents/agent.py`](clarion/agents/agent.py)** +
+   **[`clarion/sentinel/`](clarion/sentinel/)** — the ReAct loop
+   and the trust engine that wraps it.
 
 | Resource | Where |
 |---|---|
 | Discovery doc (FDE artifact) | [`docs/discovery.md`](docs/discovery.md) |
 | Developer guide | [`docs/developer_guide.md`](docs/developer_guide.md) |
 | Deployment guide | [`docs/deployment_guide.md`](docs/deployment_guide.md) |
+| Security review | [`docs/security_review.md`](docs/security_review.md) |
+| Final v1.0.0 reports | [`reports/v1.0.0/`](reports/v1.0.0/) |
 | Architecture (Mermaid source) | [`docs/architecture.mmd`](docs/architecture.mmd) |
+
+## Definition of Done (from the spec)
+
+> A recruiter opens one URL and immediately sees: live AI scheduling
+> agent, evaluation metrics, escalation analysis, full tracing,
+> multi-tenant customer switching, automated outcomes, optional voice
+> interaction.
+
+Status as of v1.0.0:
+
+| Capability | Where | Status |
+|---|---|---|
+| Live AI scheduling agent | Phase 5 + Phase 8 `POST /chat`, Phase 14 Live Agent tab | ✅ |
+| Evaluation metrics | Phase 12 + [`reports/v1.0.0/`](reports/v1.0.0/) | ✅ |
+| Escalation analysis | Phase 11 + Phase 14 Escalations tab | ✅ |
+| Full tracing | Phase 10 spans + Phase 14 Trace Explorer | ✅ |
+| Multi-tenant customer switching | Phase 2 + Phase 14 top-bar switcher | ✅ |
+| Automated outcomes (PMS writeback) | Module M1 — `summary.json` + `task.json` per call | ✅ |
+| Optional voice interaction | Module M5 — `POST /voice/turn` | ✅ |
 
 ---
 
