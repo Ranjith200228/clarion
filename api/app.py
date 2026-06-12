@@ -19,6 +19,7 @@ from fastapi import FastAPI
 from api.routes.chat import router as chat_router
 from api.routes.evaluate import router as evaluate_router
 from api.routes.health import router as health_router
+from api.routes.voice import router as voice_router
 from api.sessions import SessionManager, make_session_manager
 
 log = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ def create_app(
     *,
     settings: Settings | None = None,
     sessions: SessionManager | None = None,
+    voice_orchestrator: object | None = None,
 ) -> FastAPI:
     """Build a FastAPI app instance.
 
@@ -57,10 +59,16 @@ def create_app(
     )
     app.state.settings = settings
     app.state.sessions = sessions
+    # Module M5 — when no orchestrator is injected, POST /voice/turn
+    # responds 503 "voice_not_configured". Deployments that enable
+    # voice construct a VoiceOrchestrator(transcriber=..., speaker=...)
+    # and pass it here.
+    app.state.voice_orchestrator = voice_orchestrator
 
     app.include_router(health_router)
     app.include_router(chat_router)
     app.include_router(evaluate_router)
+    app.include_router(voice_router)
     return app
 
 
