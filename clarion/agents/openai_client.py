@@ -23,7 +23,11 @@ from clarion.agents.llm import (
     ToolCall,
     ToolSpec,
 )
-from clarion.resilience import is_transient_openai_error, retry_with_backoff
+from clarion.resilience import (
+    CircuitBreaker,
+    is_transient_openai_error,
+    retry_with_backoff,
+)
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +44,7 @@ class OpenAIClient:
         api_key: str | None = None,
         model: str | None = None,
         temperature: float = 0.2,
+        breaker: CircuitBreaker | None = None,
     ) -> None:
         # Import lazily so unit tests don't pay the openai import cost.
         from openai import OpenAI
@@ -50,10 +55,21 @@ class OpenAIClient:
         self._client = OpenAI(api_key=key)
         self._model = model or os.environ.get("CLARION_MODEL") or DEFAULT_MODEL
         self._temperature = temperature
+        # One breaker per client instance. The retry decorator stays on
+        # the same boundary method, so the composition is:
+        #   breaker.wrap(retry(network_call))
+        # which means a sustained outage trips the breaker after
+        # ``failure_threshold`` post-retry failures, not 5 * 4 = 20
+        # individual calls.
+        self._breaker = breaker or CircuitBreaker(name="openai")
 
     @property
     def model(self) -> str:
         return self._model
+
+    @property
+    def breaker(self) -> CircuitBreaker:
+        return self._breaker
 
     def complete(
         self,
@@ -70,7 +86,14 @@ class OpenAIClient:
             len(payload_messages),
             len(payload_tools),
         )
-        resp = self._chat_completions_create(payload_messages, payload_tools)
+        # Breaker on the OUTSIDE of retry — retry caps per-call
+        # latency; the breaker caps aggregate latency when the
+        # upstream is genuinely down. A failing burst of retries
+        # then counts as ONE breaker failure, not (retries-per-call)
+        # individual hits.
+        resp = self._breaker.wrap(self._chat_completions_create)(
+            payload_messages, payload_tools
+        )
         choice = resp.choices[0]
         msg = choice.message
         usage_obj = resp.usage
