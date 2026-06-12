@@ -80,7 +80,8 @@ files = ["clarion"]
 # -------- pytest --------
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q --strict-markers"
+addopts = "-q --strict-markers -m 'not loadtest'"
 markers = [
     "integration: integration tests (deselect with '-m \"not integration\"')",
+    "loadtest: in-process burst tests enforcing the p50/p95 SLA; off by default",
 ]
