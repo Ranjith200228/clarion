@@ -14,8 +14,10 @@ import sys
 
 import clarion
 from clarion.config import Settings, get_settings
+from clarion.observability import configure_logging
 from fastapi import FastAPI
 
+from api.middleware import CorrelationIdMiddleware
 from api.routes.chat import router as chat_router
 from api.routes.evaluate import router as evaluate_router
 from api.routes.health import router as health_router
@@ -30,6 +32,7 @@ def create_app(
     settings: Settings | None = None,
     sessions: SessionManager | None = None,
     voice_orchestrator: object | None = None,
+    install_logging: bool = True,
 ) -> FastAPI:
     """Build a FastAPI app instance.
 
@@ -40,6 +43,10 @@ def create_app(
             that need to swap in a FakeLLM factory.
     """
     settings = settings or get_settings()
+    if install_logging:
+        # Idempotent — safe to call from tests that build many apps
+        # within one process.
+        configure_logging()
     if sessions is None:
         sessions = make_session_manager(settings)
 
@@ -57,6 +64,7 @@ def create_app(
         },
         license_info={"name": "MIT"},
     )
+    app.add_middleware(CorrelationIdMiddleware)
     app.state.settings = settings
     app.state.sessions = sessions
     # Module M5 — when no orchestrator is injected, POST /voice/turn
