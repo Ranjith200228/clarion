@@ -11,4 +11,4 @@ def test_package_importable() -> None:
 
 def test_version_string() -> None:
     assert isinstance(clarion.__version__, str)
-    assert clarion.__version__ == "0.1.0"
+    assert clarion.__version__ == "1.0.0"
