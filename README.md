@@ -496,6 +496,43 @@ The route is mounted unconditionally; without injection it
 responds 503 with a clear `voice_not_configured` code so the
 contract is uniform across deployments.
 
+## Production hardening
+
+Phase 18 layered five operational concerns onto the demo, each
+small enough to read but big enough to matter.
+
+| Concern | Where it lives | Default |
+|---|---|---|
+| Structured JSON logging | `clarion.observability.logging` | INFO, stderr |
+| Request correlation IDs | `api.middleware.correlation` | X-Request-Id echo / mint |
+| Retry with full-jitter backoff | `clarion.resilience.retry` | 4 attempts, base 0.25 s, cap 8 s |
+| Per-instance retriever cache | `clarion.rag.retriever.Retriever` | 64-entry LRU |
+| Per-(customer, IP) rate limit | `api.middleware.rate_limit` | 10 rps, burst 30 |
+| Circuit breaker around LLM | `clarion.resilience.circuit_breaker` | 5 failures -> 30 s cooldown |
+| Load-test harness + SLA | `loadtest/`, `tests/loadtest/` | p50 < 200 ms, p95 < 500 ms |
+| Security review | [docs/security_review.md](docs/security_review.md) | STRIDE-shaped |
+
+**Composition.** The middleware order in `api.app.create_app` puts
+correlation IDs OUTSIDE rate limiting, so even rate-limit rejects
+carry an `X-Request-Id` for the client to correlate. The LLM
+client wraps retry with the circuit breaker (`breaker.wrap(retry(call))`),
+so a failing burst of retries counts as ONE breaker failure — the
+breaker tracks upstream health honestly instead of tripping on
+internal retry storms.
+
+**SLA.** The `tests/loadtest/test_p95_sla.py` budget is enforced
+under the `loadtest` pytest marker (off by default — opt in via
+`pytest -m loadtest`). It uses an in-process `TestClient` + a
+`FakeLLM` so the numbers reflect framework + middleware + agent
+overhead. For real-OpenAI numbers, run the `loadtest/locustfile.py`
+profile against a deployed instance.
+
+**Security.** [docs/security_review.md](docs/security_review.md) is
+a STRIDE-shaped audit: surfaces under review, threats and the
+controls each maps to, and an honest gap list. The TL;DR — this
+is a healthcare-vertical demonstration, not a HIPAA-certified
+product; the doc names the work needed to close that gap.
+
 ## 12. Future roadmap
 
 Post-launch modules, prioritized:
@@ -506,7 +543,7 @@ Post-launch modules, prioritized:
 | **M3: No-Show Prediction** | ✅ shipped | XGBoost on booking features; held-out ROC-AUC + top-decile lift folded into the report |
 | **M5: Voice Layer** | ✅ shipped | faster-whisper STT + OpenAI TTS; speech → STT → Clarion → TTS; reuses the entire existing engine |
 | **LangGraph refactor** | Deferred | Hierarchical router → specialist → supervisor agents. Only after launch per spec. |
-| **Phase 18: Production hardening** | Pending | Retries, caching, rate limiting, circuit breakers, structured logging, load testing, security review |
+| **Phase 18: Production hardening** | ✅ shipped | Retries, caching, rate limiting, circuit breakers, structured logging, load testing, [security review](docs/security_review.md) |
 | **Phase 19: v1.0.0 release** | Pending | Tag + release notes + demo assets + final evaluation report |
 
 The recruiter test (from the spec's "Definition of Done"):
