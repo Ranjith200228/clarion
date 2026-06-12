@@ -23,6 +23,7 @@ from clarion.agents.llm import (
     ToolCall,
     ToolSpec,
 )
+from clarion.resilience import is_transient_openai_error, retry_with_backoff
 
 log = logging.getLogger(__name__)
 
@@ -69,12 +70,7 @@ class OpenAIClient:
             len(payload_messages),
             len(payload_tools),
         )
-        resp = self._client.chat.completions.create(
-            model=self._model,
-            messages=payload_messages,  # type: ignore[arg-type]
-            tools=payload_tools or None,  # type: ignore[arg-type]
-            temperature=self._temperature,
-        )
+        resp = self._chat_completions_create(payload_messages, payload_tools)
         choice = resp.choices[0]
         msg = choice.message
         usage_obj = resp.usage
@@ -87,6 +83,30 @@ class OpenAIClient:
             content=msg.content,
             tool_calls=tuple(_from_openai_tool_call(tc) for tc in (msg.tool_calls or [])),
             usage=usage,
+        )
+
+    @retry_with_backoff(
+        max_attempts=4,
+        base_delay_s=0.25,
+        cap_s=8.0,
+        should_retry=is_transient_openai_error,
+    )
+    def _chat_completions_create(
+        self,
+        payload_messages: list[dict[str, Any]],
+        payload_tools: list[dict[str, Any]],
+    ) -> Any:
+        """Network boundary — retried with full-jitter backoff.
+
+        Split out as its own method so the decorator wraps the smallest
+        possible blast radius (the network call), not the surrounding
+        adapter logic that builds and parses the payloads.
+        """
+        return self._client.chat.completions.create(
+            model=self._model,
+            messages=payload_messages,  # type: ignore[arg-type]
+            tools=payload_tools or None,  # type: ignore[arg-type]
+            temperature=self._temperature,
         )
 
 
