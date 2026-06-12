@@ -17,7 +17,11 @@ from clarion.config import Settings, get_settings
 from clarion.observability import configure_logging
 from fastapi import FastAPI
 
-from api.middleware import CorrelationIdMiddleware
+from api.middleware import (
+    CorrelationIdMiddleware,
+    RateLimitMiddleware,
+    TokenBucketLimiter,
+)
 from api.routes.chat import router as chat_router
 from api.routes.evaluate import router as evaluate_router
 from api.routes.health import router as health_router
@@ -33,6 +37,7 @@ def create_app(
     sessions: SessionManager | None = None,
     voice_orchestrator: object | None = None,
     install_logging: bool = True,
+    rate_limiter: TokenBucketLimiter | None = None,
 ) -> FastAPI:
     """Build a FastAPI app instance.
 
@@ -64,9 +69,22 @@ def create_app(
         },
         license_info={"name": "MIT"},
     )
+    # Middleware order matters. Starlette's add_middleware stacks
+    # LIFO — the LAST added is the OUTERMOST (sees the request first
+    # inbound, the response last outbound). We want:
+    #   - CorrelationIdMiddleware outermost  -> even 429 / 5xx
+    #     responses carry X-Request-Id, and the contextvar is set
+    #     before the rate limiter inspects the body
+    #   - RateLimitMiddleware inside that    -> still rejects before
+    #     any route handler runs, paying only the body-sniff cost
+    if rate_limiter is None:
+        rate_limiter = TokenBucketLimiter()
+    app.add_middleware(RateLimitMiddleware, limiter=rate_limiter)
     app.add_middleware(CorrelationIdMiddleware)
+
     app.state.settings = settings
     app.state.sessions = sessions
+    app.state.rate_limiter = rate_limiter
     # Module M5 — when no orchestrator is injected, POST /voice/turn
     # responds 503 "voice_not_configured". Deployments that enable
     # voice construct a VoiceOrchestrator(transcriber=..., speaker=...)
