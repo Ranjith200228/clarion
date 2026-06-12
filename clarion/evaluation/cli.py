@@ -25,7 +25,8 @@ import sys
 from pathlib import Path
 
 from clarion.config import get_settings
-from clarion.evaluation.report import run_evaluation, write_report
+from clarion.evaluation.reporter import write_report
+from clarion.evaluation.runner import run_evaluation
 from clarion.simulator.templates import TEMPLATES
 
 log = logging.getLogger(__name__)
