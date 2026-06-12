@@ -35,11 +35,19 @@ from clarion.multiagent.state import (
     SupervisorDecision,
     initial_state,
 )
+from clarion.multiagent.supervisor import (
+    DEFAULT_MAX_VISITS,
+    ESCALATION_HANDOFF_TEXT,
+    Supervisor,
+    route_after_supervisor,
+)
 
 __all__ = [
     "BookingSpecialist",
     "CancelSpecialist",
+    "DEFAULT_MAX_VISITS",
     "EMERGENCY_REPLY",
+    "ESCALATION_HANDOFF_TEXT",
     "EligibilitySpecialist",
     "EmergencySpecialist",
     "HeuristicIntentRouter",
@@ -49,6 +57,8 @@ __all__ = [
     "Router",
     "Specialist",
     "SpecialistIntent",
+    "Supervisor",
     "SupervisorDecision",
     "initial_state",
+    "route_after_supervisor",
 ]
