@@ -18,6 +18,7 @@ change.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from collections import OrderedDict
 from collections.abc import Callable
@@ -181,12 +182,67 @@ class SessionManager:
 # ---------- default LLM factory used by app.py ----------
 
 
-def default_llm_factory() -> LLMClient:
-    """Build the production LLM client.
+DEMO_MODE_REPLY = (
+    "**Demo mode** — this Space is running without an `OPENAI_API_KEY`, so "
+    "the live LLM path is disabled.\n\n"
+    "Everything else on the dashboard is real and worth a look:\n\n"
+    "- **Quality Metrics** tab — locked-schema evaluation report against the "
+    "100-scenario corpus per customer.\n"
+    "- **Escalations** tab — Sentinel escalation scorer breakdown.\n"
+    "- **Trace Explorer** tab — per-turn span hierarchy with tokens + cost.\n"
+    "- **Customer switcher** (top right) — toggle ophthalmology / orthopedics "
+    "and watch the whole stack reconfigure from one YAML.\n\n"
+    "To enable the live agent, set `OPENAI_API_KEY` in **Settings → Variables "
+    "and secrets** and restart the Space."
+)
 
-    Raises if OPENAI_API_KEY is missing — tests should pass a fake
-    factory via SessionManager(llm_factory=...) instead.
+
+@dataclass
+class DemoModeLLM:
+    """No-key fallback that surfaces a clear 'demo mode' reply.
+
+    Used when ``OPENAI_API_KEY`` is unset so the Live Agent tab degrades
+    gracefully — visitors see the dashboard, the trust engine, the
+    customer switcher, and a single explanatory bubble instead of a
+    500. Production deployments set the key and never instantiate this.
+
+    The shape matches ``LLMClient`` (one method, ``complete``); no
+    tool calls are ever emitted so the ReAct loop returns the canned
+    text immediately and the rest of the agent (guardrails, audit,
+    traces) still runs.
     """
+
+    reply: str = DEMO_MODE_REPLY
+
+    def complete(self, messages: list, *, tools: list | None = None):  # type: ignore[no-untyped-def]
+        from clarion.agents.llm import LLMResponse, LLMUsage
+
+        return LLMResponse(
+            content=self.reply,
+            tool_calls=(),
+            usage=LLMUsage(model="demo-mode", input_tokens=0, output_tokens=0),
+        )
+
+
+def default_llm_factory() -> LLMClient:
+    """Build the production LLM client, or a demo-mode fallback.
+
+    When ``OPENAI_API_KEY`` is missing (e.g. an HF Space that hasn't
+    wired the secret yet), we return a :class:`DemoModeLLM` instead of
+    crashing. That keeps the Space's read-only tabs (Evaluation,
+    Escalations, Trace Explorer) and the customer switcher fully
+    usable for any visitor; the Live Agent tab surfaces a clear
+    "set the key to enable" message instead of a 500.
+
+    Production deployments set ``OPENAI_API_KEY`` and never see the
+    fallback path.
+    """
+    if not os.environ.get("OPENAI_API_KEY"):
+        log.warning(
+            "OPENAI_API_KEY not set — returning DemoModeLLM. "
+            "Set the secret + restart to enable the live agent."
+        )
+        return DemoModeLLM()
     return OpenAIClient()
 
 
