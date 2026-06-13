@@ -45,7 +45,9 @@ def build() -> TraceExplorerTab:
         interactive=False,
         wrap=True,
         # Tall by default so the user can scan many rows.
-        max_height=600,
+        # ``max_height`` lands in gradio >= 5; on the 4.44 line we
+        # use ``height`` instead (same effect; soft cap, scrolls).
+        height=600,
     )
     return TraceExplorerTab(summary_md=summary_md, table=table)
 
