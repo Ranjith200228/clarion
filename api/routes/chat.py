@@ -52,7 +52,19 @@ def chat(request: Request, body: ChatRequest) -> ChatResponse:
             detail={"detail": str(e), "code": "customer_config_invalid"},
         ) from e
 
-    reply = agent.chat(body.message)
+    try:
+        reply = agent.chat(body.message)
+    except Exception as e:
+        # Production should never 500 from a misconfigured / revoked /
+        # rate-limited LLM key. Surface a clean Markdown reply
+        # explaining what went wrong; the dashboard renders it like
+        # any other turn. Trust engine + traces + audit ran up to
+        # this point.
+        log.warning(
+            "agent.chat failed — returning soft error to client",
+            extra={"error_class": type(e).__name__, "error": str(e)[:300]},
+        )
+        reply = _soft_error_reply(e)
     metrics = _build_last_turn_metrics(agent)
     return ChatResponse(
         customer_id=body.customer_id,
@@ -60,6 +72,50 @@ def chat(request: Request, body: ChatRequest) -> ChatResponse:
         trace_id=agent.last_trace_id,
         reply=reply,
         last_turn_metrics=metrics,
+    )
+
+
+def _soft_error_reply(exc: BaseException) -> str:
+    """Map an LLM-side exception to a friendly Markdown chat bubble.
+
+    Distinguishes the three failure modes a public demo actually
+    hits: bad/revoked key, quota / rate limit, generic upstream
+    fault. Anything else lands in a generic-but-honest catch-all.
+    The class name match means we don't take a hard dep on the
+    openai SDK's exception types here.
+    """
+    name = type(exc).__name__
+    msg = str(exc)
+    auth_hits = ("Authentication", "401", "Unauthorized", "invalid_api_key")
+    quota_hits = ("RateLimit", "429", "insufficient_quota", "rate_limit", "QuotaExceeded")
+    if any(h in name or h in msg for h in auth_hits):
+        return (
+            "**The OpenAI API key for this Space looks invalid or revoked.**\n\n"
+            "If you're the owner: open the Space's **Settings → Variables "
+            "and secrets**, replace `OPENAI_API_KEY` with a current "
+            "`sk-...` value, then restart the Space.\n\n"
+            "If you're a visitor: nothing you can do — the rest of the "
+            "dashboard still works without a key (Quality Metrics, "
+            "Escalations, Trace Explorer).\n\n"
+            "*(Trust engine + traces + audit ran fine up to the LLM "
+            "call. Only the model call itself failed.)*"
+        )
+    if any(h in name or h in msg for h in quota_hits):
+        return (
+            "**The OpenAI account behind this Space hit a rate limit or "
+            "quota cap.**\n\n"
+            "Try again in a minute. If the limit persists, the Space "
+            "owner needs to top up their OpenAI billing.\n\n"
+            "*(The other dashboard tabs work without the LLM — Quality "
+            "Metrics, Escalations, Trace Explorer are all live.)*"
+        )
+    return (
+        "**The model call failed.**\n\n"
+        f"Error class: `{name}`. The Space's structured logs have the "
+        "full trace under the request's `X-Request-Id`.\n\n"
+        "If this keeps happening, the read-only tabs (Quality Metrics, "
+        "Escalations, Trace Explorer) still render the locked-schema "
+        "evaluation reports without the LLM."
     )
 
 
