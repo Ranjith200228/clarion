@@ -172,7 +172,16 @@ def voice_client(tmp_path: Path) -> Iterator[TestClient]:
         yield c
 
 
-def test_voice_endpoint_returns_503_when_no_orchestrator(tmp_path: Path) -> None:
+def test_voice_endpoint_returns_503_when_no_orchestrator(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The api.app.create_app auto-builds a VoiceOrchestrator when
+    # OPENAI_API_KEY is set in the environment. This test exercises
+    # the OPPOSITE path — no orchestrator wired -> route 503s —
+    # so we have to remove the env var first or a developer running
+    # the suite with a real key would silently get the wrong code
+    # path exercised.
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     data_dir = tmp_path / "data"
     data_dir.mkdir()
     settings = Settings(customer="ophthalmology", config_dir=CONFIGS_DIR, data_dir=data_dir)

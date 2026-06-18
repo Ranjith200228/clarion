@@ -54,6 +54,14 @@ def create_app(
         configure_logging()
     if sessions is None:
         sessions = make_session_manager(settings)
+    if voice_orchestrator is None:
+        # Module M5 default wiring. When OPENAI_API_KEY is set we
+        # build a real Whisper + TTS orchestrator so the Voice Agent
+        # tab is fully live; without a key we leave it None so
+        # POST /voice/turn responds 503 voice_not_configured (the
+        # Voice tab in Gradio renders that as a clear "set the key"
+        # bubble). Tests / advanced deployments inject their own.
+        voice_orchestrator = _default_voice_orchestrator()
 
     app = FastAPI(
         title="Clarion API",
@@ -96,6 +104,43 @@ def create_app(
     app.include_router(evaluate_router)
     app.include_router(voice_router)
     return app
+
+
+def _default_voice_orchestrator() -> object | None:
+    """Build a VoiceOrchestrator from environment configuration.
+
+    Returns None when OPENAI_API_KEY is unset — the Voice tab then
+    sees the 503 fall-through and renders a clear demo-mode bubble.
+    When the key is present, builds OpenAI Whisper + OpenAI TTS by
+    default. Operators can override audio format via the
+    ``CLARION_VOICE_OUTPUT_FORMAT`` env var (defaults to "wav" so
+    Gradio's gr.Audio plays it without an extra decoder).
+    """
+    import os
+
+    if not os.environ.get("OPENAI_API_KEY"):
+        log.info("voice: OPENAI_API_KEY not set — Voice tab will show 503 demo bubble")
+        return None
+    try:
+        from clarion.modules.voice import (
+            OpenAITtsSpeaker,
+            OpenAIWhisperTranscriber,
+            VoiceOrchestrator,
+        )
+
+        out_format = os.environ.get("CLARION_VOICE_OUTPUT_FORMAT", "wav")
+        transcriber = OpenAIWhisperTranscriber(language="en")
+        # tts-1 + alloy is the cheapest stable combo; wav so the
+        # browser plays it without a transcoder hop.
+        speaker = OpenAITtsSpeaker(
+            api_key=os.environ["OPENAI_API_KEY"],
+            response_format=out_format,  # type: ignore[arg-type]
+        )
+    except Exception:
+        log.exception("voice: orchestrator construction failed; tab will 503")
+        return None
+    log.info("voice: orchestrator ready (whisper-1 + tts-1)")
+    return VoiceOrchestrator(transcriber=transcriber, speaker=speaker)
 
 
 # Production singleton — uvicorn imports this attribute by default
