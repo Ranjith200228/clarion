@@ -19,6 +19,7 @@ import gradio as gr
 
 from gradio_app import (
     data,
+    data_sources,
     tab_escalations,
     tab_live_agent,
     tab_quality,
@@ -26,6 +27,8 @@ from gradio_app import (
     tab_voice_agent,
 )
 from gradio_app.data import SchemaVersionMismatchError
+from gradio_app.theme import CLARION_THEME, CSS
+from gradio_app.views import cost_slo, mission_control
 
 log = logging.getLogger(__name__)
 
@@ -33,11 +36,20 @@ TITLE = "Clarion — Configurable Multi-Agent Voice Automation Platform"
 
 
 def build_app() -> gr.Blocks:
-    """Construct the gr.Blocks app with four tabs + customer switcher."""
+    """Construct the gr.Blocks app.
+
+    Tab order (Phase B): Mission Control sits **first** so the app
+    opens to the recruiter view; Cost & SLO sits **last** as the
+    executive bottom strip. The five v1 tabs (Live Agent, Voice,
+    Quality, Escalations, Trace Explorer) live between, unchanged.
+    Phase G will retire the v1 tabs once their content is fully
+    represented in the v2 views; until then they stay live for
+    backwards compatibility.
+    """
     customers = data.available_customers()
     default_customer = customers[0]
 
-    with gr.Blocks(title=TITLE) as demo:
+    with gr.Blocks(title=TITLE, theme=CLARION_THEME, css=CSS) as demo:
         gr.Markdown(f"# {TITLE}")
 
         customer_dd = gr.Dropdown(
@@ -48,6 +60,10 @@ def build_app() -> gr.Blocks:
         )
 
         with gr.Tabs():
+            # v2: opens here. Cross-tenant snapshot, no customer
+            # binding — Mission Control is intentionally global.
+            with gr.Tab("Mission Control"):
+                mc_html = gr.HTML(_render_mission_control())
             with gr.Tab("Live Agent"):
                 live = tab_live_agent.build()
             with gr.Tab("Voice Agent"):
@@ -58,19 +74,29 @@ def build_app() -> gr.Blocks:
                 escalations = tab_escalations.build()
             with gr.Tab("Trace Explorer"):
                 traces = tab_trace_explorer.build()
+            with gr.Tab("Cost & SLO"):
+                cs_html = gr.HTML(_render_cost_slo())
 
         def refresh_all(  # type: ignore[no-untyped-def]
             customer_id: str,
             live_state: tab_live_agent.LiveAgentState,
             voice_state: tab_voice_agent.VoiceAgentState,
         ):
-            """Reload the three report-driven tabs + reset the live + voice states."""
+            """Reload every tab.
+
+            Mission Control + Cost & SLO are cross-tenant — they
+            rebuild on every customer switch too so a viewer who
+            toggles ophthalmology -> orthopedics sees the executive
+            view stay current with whatever was just loaded.
+            """
             new_voice_state = tab_voice_agent.VoiceAgentState(
                 customer_id=customer_id,
                 # Switching customer mid-session resets the conversation
                 # so the next voice turn starts a fresh transcript.
                 session_id="",
             )
+            mc = _render_mission_control()
+            cs = _render_cost_slo()
             try:
                 artifacts = data.load_artifacts(customer_id)
             except FileNotFoundError as e:
@@ -79,11 +105,13 @@ def build_app() -> gr.Blocks:
                 msg_t = tab_trace_explorer.render_empty(customer_id, str(e))
                 new_state = tab_live_agent.set_customer(live_state, customer_id)
                 return (
+                    mc,
                     *msg_q,
                     *msg_e,
                     *msg_t,
                     new_state,
                     new_voice_state,
+                    cs,
                 )
             except SchemaVersionMismatchError as e:
                 reason = f"schema version mismatch: {e}"
@@ -92,20 +120,23 @@ def build_app() -> gr.Blocks:
                 msg_t = tab_trace_explorer.render_empty(customer_id, reason)
                 new_state = tab_live_agent.set_customer(live_state, customer_id)
                 return (
+                    mc,
                     *msg_q,
                     *msg_e,
                     *msg_t,
                     new_state,
                     new_voice_state,
+                    cs,
                 )
 
             q = tab_quality.render(artifacts.report)
             esc = tab_escalations.render(artifacts.report)
             t = tab_trace_explorer.render(artifacts.trace_report)
             new_state = tab_live_agent.set_customer(live_state, customer_id)
-            return (*q, *esc, *t, new_state, new_voice_state)
+            return (mc, *q, *esc, *t, new_state, new_voice_state, cs)
 
         outputs = [
+            mc_html,
             quality.headline_md,
             quality.headline_table,
             quality.outcome_table,
@@ -117,6 +148,7 @@ def build_app() -> gr.Blocks:
             traces.table,
             live.state,
             voice.state,
+            cs_html,
         ]
 
         # Switcher change fans out to every tab.
@@ -133,6 +165,41 @@ def build_app() -> gr.Blocks:
         )
 
     return demo
+
+
+# ---------- v2 view renderers ----------
+
+
+def _render_mission_control() -> str:
+    """Build the Mission Control HTML.
+
+    Wraps the data-source roll-up so the app callback doesn't have
+    to know anything about typed snapshots. Returns the empty-state
+    HTML when no tenant has data on disk yet — surfacing a clear
+    "run the harness" hint instead of an empty page.
+    """
+    snapshots = data_sources.all_tenant_snapshots()
+    if not any(s.has_data for s in snapshots):
+        return mission_control.empty_html()
+    kpis = data_sources.build_global_kpis(snapshots)
+    return mission_control.build_html(
+        snapshots=snapshots,
+        kpis=kpis,
+        escalations=data_sources.recent_escalations(snapshots),
+        emergencies=data_sources.recent_emergencies(snapshots),
+    )
+
+
+def _render_cost_slo() -> str:
+    """Build the Cost & SLO HTML.
+
+    Same shape as Mission Control — typed rollup, empty-state when
+    no traces are on disk.
+    """
+    snapshots = data_sources.all_tenant_snapshots()
+    if not any(s.has_data for s in snapshots):
+        return cost_slo.empty_html()
+    return cost_slo.build_html(data_sources.build_cost_slo(snapshots))
 
 
 def main() -> int:
