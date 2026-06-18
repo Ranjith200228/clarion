@@ -28,7 +28,7 @@ from gradio_app import (
 )
 from gradio_app.data import SchemaVersionMismatchError
 from gradio_app.theme import CLARION_THEME, CSS
-from gradio_app.views import cost_slo, mission_control
+from gradio_app.views import cost_slo, mission_control, sentinel_ops
 
 log = logging.getLogger(__name__)
 
@@ -64,6 +64,11 @@ def build_app() -> gr.Blocks:
             # binding — Mission Control is intentionally global.
             with gr.Tab("Mission Control"):
                 mc_html = gr.HTML(_render_mission_control())
+            # v2 hero — primary feature per the Phase 0 plan. The
+            # trust engine has zero UI in v1; this is its dedicated
+            # surface. Per-tenant (binds to the customer dropdown).
+            with gr.Tab("Sentinel Ops"):
+                so_html = gr.HTML(_render_sentinel_ops(default_customer))
             with gr.Tab("Live Agent"):
                 live = tab_live_agent.build()
             with gr.Tab("Voice Agent"):
@@ -96,6 +101,7 @@ def build_app() -> gr.Blocks:
                 session_id="",
             )
             mc = _render_mission_control()
+            so = _render_sentinel_ops(customer_id)
             cs = _render_cost_slo()
             try:
                 artifacts = data.load_artifacts(customer_id)
@@ -106,6 +112,7 @@ def build_app() -> gr.Blocks:
                 new_state = tab_live_agent.set_customer(live_state, customer_id)
                 return (
                     mc,
+                    so,
                     *msg_q,
                     *msg_e,
                     *msg_t,
@@ -121,6 +128,7 @@ def build_app() -> gr.Blocks:
                 new_state = tab_live_agent.set_customer(live_state, customer_id)
                 return (
                     mc,
+                    so,
                     *msg_q,
                     *msg_e,
                     *msg_t,
@@ -133,10 +141,11 @@ def build_app() -> gr.Blocks:
             esc = tab_escalations.render(artifacts.report)
             t = tab_trace_explorer.render(artifacts.trace_report)
             new_state = tab_live_agent.set_customer(live_state, customer_id)
-            return (mc, *q, *esc, *t, new_state, new_voice_state, cs)
+            return (mc, so, *q, *esc, *t, new_state, new_voice_state, cs)
 
         outputs = [
             mc_html,
+            so_html,
             quality.headline_md,
             quality.headline_table,
             quality.outcome_table,
@@ -188,6 +197,17 @@ def _render_mission_control() -> str:
         escalations=data_sources.recent_escalations(snapshots),
         emergencies=data_sources.recent_emergencies(snapshots),
     )
+
+
+def _render_sentinel_ops(customer_id: str) -> str:
+    """Build the Sentinel Operations Center HTML for one customer.
+
+    The hero view is per-tenant — it binds to the active customer
+    dropdown selection. The empty-state fall-back inside the view
+    handles "no trace report on disk" without crashing.
+    """
+    ops = data_sources.build_sentinel_ops(customer_id)
+    return sentinel_ops.build_html(ops)
 
 
 def _render_cost_slo() -> str:

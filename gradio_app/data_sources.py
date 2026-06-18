@@ -27,7 +27,9 @@ loudly — that's the design.
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 import statistics
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -35,6 +37,7 @@ from pathlib import Path
 from typing import Literal
 
 from clarion.schemas import (
+    EscalationWeights,
     EvaluationReport,
     TraceEntry,
 )
@@ -156,6 +159,74 @@ class GlobalCostSLO:
     monthly_projection_usd: float  # naive: last-7d cost / 7 * 30
     global_p50_ms: float
     global_p95_ms: float
+
+
+@dataclass(frozen=True)
+class SignalContribution:
+    """One row in the Sentinel Operations Center signal breakdown.
+
+    Built by parsing per-entry ``escalation_reasons`` strings (the
+    scorer emits them as ``"name=0.42"``) and folding them into
+    means + counts. The ``weight`` carries the configured
+    :class:`EscalationWeights` for the matching signal so the view
+    can show "raw signal x weight = contribution to composite."
+    """
+
+    name: str
+    raw_mean: float
+    weight: float
+    contribution: float  # raw_mean * weight
+    fire_count: int      # entries that registered a non-zero value
+
+
+@dataclass(frozen=True)
+class JudgeAgreement:
+    """LLM-as-judge agreement rollup (per tenant)."""
+
+    sampled_turns: int                # entries that had a judge verdict at all
+    no_hallucination_pct: float       # fraction with judge_hallucination ~ 0
+    booking_correct_mean: float       # mean of judge_booking_correct (None ignored)
+    violations_total: int             # sum of len(judge_violations) across entries
+
+
+@dataclass(frozen=True)
+class AuditTailItem:
+    """One row in the audit-log tail panel.
+
+    The audit log is the canonical PHI-redaction surface, so these
+    strings are safe to render directly — the writer redacted on
+    write. We do not re-redact here; doing so would mask
+    redactor bugs.
+    """
+
+    ts: str
+    kind: str           # event class label, mapped from AuditTurn.payload
+    summary: str        # already-redacted one-line description
+
+
+@dataclass(frozen=True)
+class SentinelOpsSnapshot:
+    """Per-tenant Sentinel Operations Center rollup.
+
+    Built from one tenant's TraceReport + AuditLog. The view
+    consumes this directly — no per-row business logic past this
+    boundary.
+    """
+
+    tenant: str
+    has_data: bool
+    sample_count: int                  # turns the snapshot was built from
+    mean_escalation_score: float       # 0 = always safe, 1 = always escalate
+    trust_score: float                 # 1 - mean_escalation_score
+    decision_threshold: float          # the configured escalate-at boundary
+    signals: list[SignalContribution]  # 5 rows (one per EscalationSignals field)
+    judge: JudgeAgreement
+    phi_redactions_total: int          # PHI redactions seen across this tenant's audit log
+    audit_tail: list[AuditTailItem]    # last 10 events, newest first
+    emergencies_caught: int            # entries with emergency outcome OR reason
+    escalation_precision: float        # carried through from EvaluationReport
+    escalation_recall: float
+    escalation_f1: float
 
 
 # ---------- single-tenant builder ----------
@@ -379,6 +450,279 @@ def recent_emergencies(
     return items[:limit]
 
 
+# ---------- Sentinel Operations Center ----------
+
+
+# Signal name → human-readable label rendered in the UI. Pinning
+# the list here keeps the view from inventing display names.
+_SIGNAL_LABELS: dict[str, str] = {
+    "low_confidence":         "Low confidence",
+    "repeated_clarification": "Repeated clarification",
+    "rule_conflict":          "Rule conflict",
+    "frustration":            "Frustration",
+    "unsupported_request":    "Unsupported request",
+}
+
+# Match "name=0.42" reason strings the scorer emits. Anchored at the
+# start so a stray "frustration_x=0.5" never collides with the
+# frustration signal. The value is optional — older traces sometimes
+# carry bare reasons like "already_escalated".
+_REASON_RE = re.compile(r"^([a-z_]+)(?:=([0-9.]+))?$")
+
+
+def build_sentinel_ops(
+    customer_id: str,
+    *,
+    data_dir: Path | None = None,
+) -> SentinelOpsSnapshot:
+    """Build the Sentinel Operations Center rollup for one customer.
+
+    Aggregates over:
+      * ``TraceReport.entries`` for escalation score + signal
+        contributions + judge agreement
+      * ``EvaluationReport.metrics`` for headline precision/recall/F1
+        (the scoreboard tile)
+      * ``data_dir/<customer_id>/audit.jsonl`` for PHI redaction
+        totals + the audit tail
+
+    Returns ``has_data=False`` snapshot when no trace report is on
+    disk for the customer. The view interprets that as the
+    empty-state message rather than crashing.
+    """
+    display_name = _humanize(customer_id)
+
+    try:
+        report = data_loader.load_report(customer_id, data_dir)
+        trace = data_loader.load_trace_report(customer_id, data_dir)
+    except (FileNotFoundError, data_loader.SchemaVersionMismatchError) as exc:
+        log.info("sentinel ops: tenant %r has no usable artifacts: %s", customer_id, exc)
+        return _empty_sentinel_ops(display_name)
+
+    entries = trace.entries
+    if not entries:
+        return _empty_sentinel_ops(display_name)
+
+    # Threshold reflects the locked scorer convention — anything at
+    # or above 0.5 escalates. We expose the raw value so the view's
+    # gauge can draw the hairline at the right place.
+    decision_threshold = 0.5
+
+    # Composite — mean across entries that have any score at all.
+    scored_entries = [e for e in entries if e.escalation_score is not None]
+    mean_score = (
+        statistics.fmean(e.escalation_score or 0.0 for e in scored_entries)
+        if scored_entries
+        else 0.0
+    )
+
+    signals = _signal_contributions(entries)
+    judge = _judge_agreement(entries)
+    audit_total, audit_tail = _audit_view(customer_id, data_dir=data_dir)
+    emergencies = sum(1 for e in entries if _is_emergency(e))
+
+    return SentinelOpsSnapshot(
+        tenant=display_name,
+        has_data=True,
+        sample_count=len(entries),
+        mean_escalation_score=round(mean_score, 4),
+        trust_score=max(0.0, 1.0 - mean_score),
+        decision_threshold=decision_threshold,
+        signals=signals,
+        judge=judge,
+        phi_redactions_total=audit_total,
+        audit_tail=audit_tail,
+        emergencies_caught=emergencies,
+        escalation_precision=report.metrics.escalation_precision,
+        escalation_recall=report.metrics.escalation_recall,
+        escalation_f1=report.metrics.escalation_f1,
+    )
+
+
+# ---------- Sentinel internals ----------
+
+
+def _empty_sentinel_ops(display_name: str) -> SentinelOpsSnapshot:
+    """The no-data shape — every field zeroed but in the right shape
+    so the view's renderer doesn't need a separate code path."""
+    return SentinelOpsSnapshot(
+        tenant=display_name,
+        has_data=False,
+        sample_count=0,
+        mean_escalation_score=0.0,
+        trust_score=0.0,
+        decision_threshold=0.5,
+        signals=[],
+        judge=JudgeAgreement(
+            sampled_turns=0,
+            no_hallucination_pct=0.0,
+            booking_correct_mean=0.0,
+            violations_total=0,
+        ),
+        phi_redactions_total=0,
+        audit_tail=[],
+        emergencies_caught=0,
+        escalation_precision=0.0,
+        escalation_recall=0.0,
+        escalation_f1=0.0,
+    )
+
+
+def _signal_contributions(entries: list[TraceEntry]) -> list[SignalContribution]:
+    """Mean per-signal value x configured weight, across all entries.
+
+    The scorer logs each fired signal as a reason string like
+    ``"low_confidence=0.80"``. We parse those strings, average per
+    signal name, multiply by the schema-default weight, and return
+    one row per signal in the order the schema defines them.
+    """
+    weights = EscalationWeights()  # locked defaults from the schema
+    weight_by_name = {
+        "low_confidence":         weights.low_confidence,
+        "repeated_clarification": weights.repeated_clarification,
+        "rule_conflict":          weights.rule_conflict,
+        "frustration":            weights.frustration,
+        "unsupported_request":    weights.unsupported_request,
+    }
+
+    # Bucket parsed values per signal.
+    per_signal_values: dict[str, list[float]] = {name: [] for name in weight_by_name}
+    fire_count: dict[str, int] = {name: 0 for name in weight_by_name}
+
+    for entry in entries:
+        for reason in entry.escalation_reasons:
+            match = _REASON_RE.match(reason)
+            if not match:
+                continue
+            name = match.group(1)
+            if name not in per_signal_values:
+                continue
+            value_str = match.group(2)
+            if value_str is None:
+                # Reasons without a value still mean the signal fired;
+                # treat as 1.0 so the count rises but the mean stays
+                # bounded by entries that DID carry a numeric value.
+                fire_count[name] += 1
+                continue
+            try:
+                value = float(value_str)
+            except ValueError:
+                continue
+            per_signal_values[name].append(value)
+            fire_count[name] += 1
+
+    out: list[SignalContribution] = []
+    for name, label in _SIGNAL_LABELS.items():
+        values = per_signal_values[name]
+        raw_mean = statistics.fmean(values) if values else 0.0
+        weight = weight_by_name[name]
+        out.append(
+            SignalContribution(
+                name=label,
+                raw_mean=round(raw_mean, 4),
+                weight=weight,
+                contribution=round(raw_mean * weight, 4),
+                fire_count=fire_count[name],
+            )
+        )
+    return out
+
+
+def _judge_agreement(entries: list[TraceEntry]) -> JudgeAgreement:
+    """LLM-as-judge rollup. Entries without a verdict are excluded
+    from the rates so a small judge sample doesn't get diluted by
+    judge-less entries."""
+    judged = [e for e in entries if e.judge_hallucination is not None]
+    if not judged:
+        return JudgeAgreement(
+            sampled_turns=0,
+            no_hallucination_pct=0.0,
+            booking_correct_mean=0.0,
+            violations_total=0,
+        )
+    no_halluc = sum(1 for e in judged if (e.judge_hallucination or 0.0) < 0.05)
+    booking_values = [
+        e.judge_booking_correct for e in judged if e.judge_booking_correct is not None
+    ]
+    booking_mean = statistics.fmean(booking_values) if booking_values else 0.0
+    violations = sum(len(e.judge_violations) for e in judged)
+    return JudgeAgreement(
+        sampled_turns=len(judged),
+        no_hallucination_pct=no_halluc / len(judged),
+        booking_correct_mean=round(booking_mean, 4),
+        violations_total=violations,
+    )
+
+
+def _audit_view(
+    customer_id: str,
+    *,
+    data_dir: Path | None,
+) -> tuple[int, list[AuditTailItem]]:
+    """Read ``<data_dir>/<customer>/audit.jsonl``.
+
+    Returns (total_phi_redactions_across_log, last_10_events_newest_first).
+    When the audit file doesn't exist (fresh deploy / never written),
+    surfaces (0, []). The view explicitly handles that as "no audit
+    on disk yet — agent never spoke."
+    """
+    base = data_dir if data_dir is not None else data_loader.DEFAULT_DATA_DIR
+    path = base / customer_id / "audit.jsonl"
+    if not path.is_file():
+        return 0, []
+
+    items: list[AuditTailItem] = []
+    total_redactions = 0
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            for raw in f:
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    record = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+                redactions = record.get("redactions") or {}
+                if isinstance(redactions, dict):
+                    total_redactions += sum(
+                        int(v) for v in redactions.values() if isinstance(v, int)
+                    )
+                items.append(_audit_record_to_item(record))
+    except OSError:
+        return 0, []
+
+    # Newest first, capped at 10. The audit log is append-only so
+    # the last lines on disk are the most recent.
+    items.reverse()
+    return total_redactions, items[:10]
+
+
+def _audit_record_to_item(record: dict) -> AuditTailItem:
+    """Map one audit JSON line to the typed tail-row dataclass."""
+    ts_raw = str(record.get("timestamp", ""))
+    # Show "HH:MM:SS" in UTC for a tidy row. Falls back to the raw
+    # value when the format isn't ISO.
+    ts = ts_raw[11:19] if "T" in ts_raw and len(ts_raw) >= 19 else ts_raw[:8]
+    guardrail = str(record.get("guardrail", "safe"))
+    kind = _kind_from_guardrail(guardrail)
+    # Truncate the redacted reply so the row stays one line. The
+    # writer already PHI-redacted the content — we never re-redact.
+    reply = str(record.get("agent_reply", ""))
+    summary = (reply[:100] + "…") if len(reply) > 100 else reply
+    return AuditTailItem(ts=ts, kind=kind, summary=summary or "(no reply)")
+
+
+def _kind_from_guardrail(guardrail: str) -> str:
+    """Map a guardrail outcome string to a short UI label."""
+    if guardrail == "safe":
+        return "chat"
+    if guardrail.startswith("emergency"):
+        return "emergency"
+    if guardrail.startswith("clinical"):
+        return "clinical"
+    return guardrail
+
+
 # ---------- Cost & SLO ----------
 
 
@@ -581,17 +925,22 @@ def _relative_time(ts: datetime | None) -> str:
 
 
 __all__ = [
+    "AuditTailItem",
     "CostBreakdown",
     "EmergencyItem",
     "EscalationItem",
     "GlobalCostSLO",
     "GlobalKPIs",
     "HealthStatus",
+    "JudgeAgreement",
     "LatencyBreakdown",
+    "SentinelOpsSnapshot",
+    "SignalContribution",
     "TenantSnapshot",
     "all_tenant_snapshots",
     "build_cost_slo",
     "build_global_kpis",
+    "build_sentinel_ops",
     "build_tenant_snapshot",
     "recent_emergencies",
     "recent_escalations",
