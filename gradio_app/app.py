@@ -23,6 +23,7 @@ from gradio_app import (
     tab_live_agent,
     tab_quality,
     tab_trace_explorer,
+    tab_voice_agent,
 )
 from gradio_app.data import SchemaVersionMismatchError
 
@@ -49,6 +50,8 @@ def build_app() -> gr.Blocks:
         with gr.Tabs():
             with gr.Tab("Live Agent"):
                 live = tab_live_agent.build()
+            with gr.Tab("Voice Agent"):
+                voice = tab_voice_agent.build()
             with gr.Tab("Quality Metrics"):
                 quality = tab_quality.build()
             with gr.Tab("Escalations"):
@@ -59,8 +62,15 @@ def build_app() -> gr.Blocks:
         def refresh_all(  # type: ignore[no-untyped-def]
             customer_id: str,
             live_state: tab_live_agent.LiveAgentState,
+            voice_state: tab_voice_agent.VoiceAgentState,
         ):
-            """Reload the three report-driven tabs + reset the live state."""
+            """Reload the three report-driven tabs + reset the live + voice states."""
+            new_voice_state = tab_voice_agent.VoiceAgentState(
+                customer_id=customer_id,
+                # Switching customer mid-session resets the conversation
+                # so the next voice turn starts a fresh transcript.
+                session_id="",
+            )
             try:
                 artifacts = data.load_artifacts(customer_id)
             except FileNotFoundError as e:
@@ -73,6 +83,7 @@ def build_app() -> gr.Blocks:
                     *msg_e,
                     *msg_t,
                     new_state,
+                    new_voice_state,
                 )
             except SchemaVersionMismatchError as e:
                 reason = f"schema version mismatch: {e}"
@@ -85,13 +96,14 @@ def build_app() -> gr.Blocks:
                     *msg_e,
                     *msg_t,
                     new_state,
+                    new_voice_state,
                 )
 
             q = tab_quality.render(artifacts.report)
             esc = tab_escalations.render(artifacts.report)
             t = tab_trace_explorer.render(artifacts.trace_report)
             new_state = tab_live_agent.set_customer(live_state, customer_id)
-            return (*q, *esc, *t, new_state)
+            return (*q, *esc, *t, new_state, new_voice_state)
 
         outputs = [
             quality.headline_md,
@@ -104,18 +116,19 @@ def build_app() -> gr.Blocks:
             traces.summary_md,
             traces.table,
             live.state,
+            voice.state,
         ]
 
         # Switcher change fans out to every tab.
         customer_dd.change(
             fn=refresh_all,
-            inputs=[customer_dd, live.state],
+            inputs=[customer_dd, live.state, voice.state],
             outputs=outputs,
         )
         # Initial population on app load.
         demo.load(
             fn=refresh_all,
-            inputs=[customer_dd, live.state],
+            inputs=[customer_dd, live.state, voice.state],
             outputs=outputs,
         )
 
