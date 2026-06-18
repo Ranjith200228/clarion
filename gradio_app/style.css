@@ -1,0 +1,414 @@
+/* ============================================================
+ * Clarion mission-control stylesheet.
+ *
+ * Loaded once per Gradio Blocks instance via
+ *   gr.Blocks(css=gradio_app.theme.CSS)
+ *
+ * Three layers — never mix them:
+ *   1. Tokens     (CSS custom properties on :root)
+ *   2. Primitives (class-based components: .kpi-tile, .gauge, ...)
+ *   3. Layouts    (utility classes: .grid-mc, .row-flex, ...)
+ *
+ * Rules:
+ *   - All color/size values come from tokens; no inline hex.
+ *   - We style INSIDE our own .clarion-* containers; we never
+ *     selector-hunt Gradio's internal classes. A Gradio version
+ *     bump can change those without notice.
+ *   - The color tokens here mirror the PALETTE dict in
+ *     gradio_app/theme.py. A snapshot test guards drift.
+ * ============================================================ */
+
+
+/* ---------- Layer 1: tokens ---------- */
+
+:root {
+    /* Surfaces — dark mode default. */
+    --c-bg:            #0B1220;
+    --c-bg-panel:      #111827;
+    --c-bg-subtle:     #1F2937;
+    --c-border:        #1F2937;
+    --c-border-strong: #374151;
+
+    /* Text. */
+    --c-text:          #E5E7EB;
+    --c-text-strong:   #F9FAFB;
+    --c-text-muted:    #9CA3AF;
+
+    /* Brand. */
+    --c-accent:        #06B6D4;
+    --c-accent-dim:    #0E7490;
+
+    /* Status. */
+    --c-healthy:       #10B981;
+    --c-warning:       #F59E0B;
+    --c-critical:      #EF4444;
+    --c-info:          #3B82F6;
+
+    /* Mono surface. */
+    --c-mono-fg:       #A5F3FC;
+
+    /* Type scale. */
+    --fs-xs:    0.75rem;
+    --fs-sm:    0.875rem;
+    --fs-md:    1rem;
+    --fs-lg:    1.25rem;
+    --fs-xl:    1.75rem;
+    --fs-2xl:   2.25rem;
+    --fs-kpi:   2.5rem;
+
+    --fw-regular:  400;
+    --fw-medium:   500;
+    --fw-semibold: 600;
+    --fw-bold:     700;
+
+    /* Spacing + radii. */
+    --sp-1: 4px;
+    --sp-2: 8px;
+    --sp-3: 12px;
+    --sp-4: 16px;
+    --sp-5: 24px;
+    --sp-6: 32px;
+    --sp-7: 48px;
+
+    --r-sm:   4px;
+    --r-md:   8px;
+    --r-lg:   12px;
+    --r-pill: 999px;
+
+    /* Motion. */
+    --ease-out:   cubic-bezier(0.16, 1, 0.3, 1);
+    --t-fast:     150ms;
+    --t-med:      250ms;
+
+    /* Mono font stack — set on body once. */
+    --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code",
+                 "Roboto Mono", Menlo, Consolas, monospace;
+}
+
+/* Light-mode override — flip a .theme-light class on the root node
+ * (Phase G adds the toggle). Token names stay the same; only the
+ * values flip. Primitives never care which mode is active. */
+.theme-light {
+    --c-bg:            #F9FAFB;
+    --c-bg-panel:      #FFFFFF;
+    --c-bg-subtle:     #F3F4F6;
+    --c-border:        #E5E7EB;
+    --c-border-strong: #D1D5DB;
+    --c-text:          #1F2937;
+    --c-text-strong:   #111827;
+    --c-text-muted:    #6B7280;
+}
+
+
+/* ---------- Layer 2: primitives ---------- */
+
+/* All Clarion components live inside a .clarion-* container so
+ * we can scope rules without colliding with Gradio internals. */
+
+/* KPI tile — top-strip building block. */
+.clarion-kpi-tile {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-width: 120px;
+    height: 96px;
+    padding: var(--sp-3) var(--sp-4);
+    background: var(--c-bg-panel);
+    border: 1px solid var(--c-border);
+    border-left-width: 3px;
+    border-radius: var(--r-md);
+    transition: border-color var(--t-fast) var(--ease-out);
+}
+.clarion-kpi-tile:hover { border-color: var(--c-border-strong); }
+.clarion-kpi-tile[data-status="healthy"]  { border-left-color: var(--c-healthy); }
+.clarion-kpi-tile[data-status="warning"]  { border-left-color: var(--c-warning); }
+.clarion-kpi-tile[data-status="critical"] { border-left-color: var(--c-critical); }
+.clarion-kpi-tile[data-status="info"]     { border-left-color: var(--c-accent); }
+.clarion-kpi-tile[data-status="unknown"]  { border-left-color: var(--c-border-strong); }
+
+.clarion-kpi-label {
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-medium);
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.clarion-kpi-value {
+    font-size: var(--fs-kpi);
+    font-weight: var(--fw-semibold);
+    color: var(--c-text-strong);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+.clarion-kpi-delta {
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-medium);
+    font-variant-numeric: tabular-nums;
+}
+.clarion-kpi-delta[data-trend="up"]   { color: var(--c-healthy); }
+.clarion-kpi-delta[data-trend="down"] { color: var(--c-critical); }
+.clarion-kpi-delta[data-trend="flat"] { color: var(--c-text-muted); }
+
+/* Status badge — small pill, used everywhere. */
+.clarion-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-1);
+    padding: 2px var(--sp-2);
+    border-radius: var(--r-pill);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+}
+.clarion-badge[data-state="healthy"]  { background: rgba(16, 185, 129, 0.15); color: var(--c-healthy); }
+.clarion-badge[data-state="warning"]  { background: rgba(245, 158, 11, 0.15); color: var(--c-warning); }
+.clarion-badge[data-state="critical"] { background: rgba(239, 68, 68, 0.15); color: var(--c-critical); }
+.clarion-badge[data-state="info"]     { background: rgba(6, 182, 212, 0.15); color: var(--c-accent); }
+.clarion-badge[data-state="unknown"]  { background: rgba(156, 163, 175, 0.15); color: var(--c-text-muted); }
+.clarion-badge .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+/* Trust gauge — inline SVG semicircle. The SVG itself comes from
+ * components.trust_gauge(); we only style its wrapper here. */
+.clarion-gauge {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-4);
+    background: var(--c-bg-panel);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-lg);
+}
+.clarion-gauge-label {
+    font-size: var(--fs-sm);
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.clarion-gauge-value {
+    font-size: var(--fs-2xl);
+    font-weight: var(--fw-bold);
+    color: var(--c-text-strong);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Signal bar — used by the Sentinel Operations Center for each
+ * weighted escalation signal. */
+.clarion-signal {
+    display: grid;
+    grid-template-columns: 140px 1fr 56px;
+    gap: var(--sp-3);
+    align-items: center;
+    padding: var(--sp-2) 0;
+}
+.clarion-signal-name {
+    font-size: var(--fs-sm);
+    color: var(--c-text);
+    font-weight: var(--fw-medium);
+}
+.clarion-signal-track {
+    position: relative;
+    height: 8px;
+    background: var(--c-bg-subtle);
+    border-radius: var(--r-pill);
+    overflow: hidden;
+}
+.clarion-signal-fill {
+    height: 100%;
+    background: var(--c-accent);
+    border-radius: var(--r-pill);
+    transition: width var(--t-med) var(--ease-out);
+}
+.clarion-signal-fill[data-weight="heavy"]  { background: var(--c-critical); }
+.clarion-signal-fill[data-weight="medium"] { background: var(--c-warning); }
+.clarion-signal-fill[data-weight="light"]  { background: var(--c-accent); }
+.clarion-signal-value {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--c-text-muted);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Latency ring — small SVG ring chart for Voice Intelligence. */
+.clarion-latency-ring {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sp-1);
+    width: 80px;
+}
+.clarion-latency-ring-label {
+    font-size: var(--fs-xs);
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.clarion-latency-ring-value {
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+    color: var(--c-text-strong);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Tenant card — left-rail nav item (Phase G). */
+.clarion-tenant-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+    padding: var(--sp-3);
+    background: var(--c-bg-panel);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-md);
+    cursor: pointer;
+    transition: border-color var(--t-fast) var(--ease-out);
+}
+.clarion-tenant-card:hover,
+.clarion-tenant-card[data-active="true"] {
+    border-color: var(--c-accent);
+}
+.clarion-tenant-card-name {
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-semibold);
+    color: var(--c-text-strong);
+}
+.clarion-tenant-card-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--fs-xs);
+    color: var(--c-text-muted);
+}
+
+/* Incident row — used on Mission Control and Sentinel Ops. */
+.clarion-incident {
+    display: grid;
+    grid-template-columns: 80px 90px 140px 1fr;
+    gap: var(--sp-3);
+    align-items: center;
+    padding: var(--sp-2) var(--sp-3);
+    border-bottom: 1px solid var(--c-border);
+    font-size: var(--fs-sm);
+}
+.clarion-incident:last-child { border-bottom: none; }
+.clarion-incident-time {
+    font-family: var(--font-mono);
+    color: var(--c-text-muted);
+    font-variant-numeric: tabular-nums;
+}
+.clarion-incident-tenant {
+    color: var(--c-text);
+    font-weight: var(--fw-medium);
+}
+.clarion-incident-summary {
+    color: var(--c-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Agent flow node — used in the live SVG diagram (Phase D). */
+.clarion-agent-node {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+    min-width: 140px;
+    padding: var(--sp-3);
+    background: var(--c-bg-panel);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-md);
+    transition: border-color var(--t-med) var(--ease-out),
+                box-shadow var(--t-med) var(--ease-out);
+}
+.clarion-agent-node[data-state="active"] {
+    border-color: var(--c-accent);
+    box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.18);
+}
+.clarion-agent-node[data-state="done"]      { border-color: var(--c-healthy); }
+.clarion-agent-node[data-state="escalated"] { border-color: var(--c-critical); }
+.clarion-agent-node-name {
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-semibold);
+    color: var(--c-text-strong);
+}
+.clarion-agent-node-meta {
+    display: flex;
+    gap: var(--sp-3);
+    font-size: var(--fs-xs);
+    color: var(--c-text-muted);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Cost chip — monospace pill for $ values. */
+.clarion-cost-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--sp-1);
+    padding: 2px var(--sp-2);
+    background: var(--c-bg-subtle);
+    border-radius: var(--r-pill);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--c-mono-fg);
+    font-variant-numeric: tabular-nums;
+}
+.clarion-cost-chip-period {
+    color: var(--c-text-muted);
+}
+
+/* Mono span — wrap trace IDs, conv IDs, anything we want monospaced. */
+.clarion-mono {
+    font-family: var(--font-mono);
+    color: var(--c-mono-fg);
+    font-variant-numeric: tabular-nums;
+}
+
+
+/* ---------- Layer 3: layouts ---------- */
+
+/* Mission-control top-strip grid — auto-fit so it works at any
+ * viewport width down to ~640 px. */
+.clarion-kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: var(--sp-3);
+    padding: var(--sp-3) 0;
+}
+
+/* Generic horizontal flex with consistent gap — used by chip rows. */
+.clarion-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    flex-wrap: wrap;
+}
+
+/* Vertical stack with consistent gap — panel internals. */
+.clarion-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+}
+
+/* Panel wrapper — every named-section card uses this. */
+.clarion-panel {
+    padding: var(--sp-4);
+    background: var(--c-bg-panel);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-lg);
+}
+.clarion-panel-title {
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-semibold);
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: var(--sp-3);
+}
