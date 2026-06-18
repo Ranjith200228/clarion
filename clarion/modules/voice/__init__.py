@@ -17,6 +17,7 @@ from clarion.modules.voice.orchestrator import TurnLatencies, VoiceOrchestrator
 from clarion.modules.voice.stt import (
     EchoTranscriber,
     FasterWhisperTranscriber,
+    OpenAIWhisperTranscriber,
     TranscriberProtocol,
 )
 from clarion.modules.voice.tts import (
@@ -29,6 +30,7 @@ __all__ = [
     "EchoTranscriber",
     "FasterWhisperTranscriber",
     "OpenAITtsSpeaker",
+    "OpenAIWhisperTranscriber",
     "SineWaveSpeaker",
     "SpeakerProtocol",
     "TranscriberProtocol",

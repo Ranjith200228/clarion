@@ -1,11 +1,17 @@
 """Speech-to-text adapters for Module M5.
 
-Two implementations sit behind ``TranscriberProtocol``:
+Three implementations sit behind ``TranscriberProtocol``:
 
-* ``FasterWhisperTranscriber`` — production path. faster-whisper is
+* ``OpenAIWhisperTranscriber`` — managed-service path. Calls OpenAI's
+  ``audio.transcriptions`` endpoint (whisper-1). Zero extra deps —
+  ``openai`` is already in the core install — and zero on-disk model
+  weights, so it suits constrained deployments (HF Spaces' CPU
+  basic tier) where faster-whisper's ~1GB is a non-starter.
+* ``FasterWhisperTranscriber`` — self-hosted path. faster-whisper is
   ~1GB once you count ctranslate2 + the model weights, so we
   lazy-import it; the module's own import stays cheap when the
-  voice feature is off.
+  voice feature is off. Right for deployments that need no
+  third-party calls.
 * ``EchoTranscriber`` — deterministic test stub. The "audio" is
   treated as a UTF-8 text payload (the orchestrator's tests
   encode short strings as bytes); whatever shows up in is what
@@ -21,7 +27,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Protocol
+from typing import ClassVar, Protocol
 
 from clarion.schemas import TranscriptionResult
 
@@ -60,6 +66,96 @@ class EchoTranscriber:
             confidence=None,
             duration_ms=len(audio),
             transcriber_version=self.transcriber_version,
+        )
+
+
+class OpenAIWhisperTranscriber:
+    """OpenAI Whisper-1 transcriber — managed STT over HTTPS.
+
+    Why this is the default for the live Space:
+
+    * No extra runtime dep — the ``openai`` client is already pinned
+      for the agent's LLM calls. faster-whisper would add ~1 GB to
+      the image and exceed HF Spaces' free-tier disk.
+    * Whisper-1 is multilingual out of the box; the agent path can
+      stay English-only without the transcriber forcing it.
+    * Lazy import of the SDK so this module's own import stays
+      cheap when no real transcriber is constructed.
+    """
+
+    _MIME_BY_FORMAT: ClassVar[dict[str, str]] = {
+        "wav": "audio/wav",
+        "mp3": "audio/mpeg",
+        "ogg": "audio/ogg",
+        "webm": "audio/webm",
+        "m4a": "audio/mp4",
+    }
+
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        model: str = "whisper-1",
+        audio_format: str = "wav",
+        language: str | None = None,
+    ) -> None:
+        try:
+            from openai import OpenAI
+        except ImportError as e:  # pragma: no cover — openai is a core dep
+            raise RuntimeError(
+                "openai is not installed — install the core deps before "
+                "constructing OpenAIWhisperTranscriber"
+            ) from e
+        import os
+
+        key = api_key or os.environ.get("OPENAI_API_KEY")
+        if not key:
+            raise RuntimeError(
+                "OpenAIWhisperTranscriber requires OPENAI_API_KEY "
+                "(env or constructor arg)."
+            )
+        self._client = OpenAI(api_key=key)
+        self._model = model
+        self._format = audio_format
+        self._language = language
+        self._mime = self._MIME_BY_FORMAT.get(audio_format, "application/octet-stream")
+        self._filename = f"audio.{audio_format}"
+
+    @property
+    def version(self) -> str:
+        return f"openai-whisper:{self._model}"
+
+    def transcribe(self, audio: bytes, *, sample_rate_hz: int) -> TranscriptionResult:
+        start = time.perf_counter()
+        # The SDK accepts a (filename, bytes, mime) tuple for the file
+        # argument — that matches multipart upload semantics without
+        # ever touching disk. We pass call args inline (not via dict
+        # unpack) so the SDK's overload resolution narrows to the
+        # non-streaming variant; kwargs-spread would force the
+        # union-return type and confuse mypy.
+        file_tuple = (self._filename, audio, self._mime)
+        if self._language:
+            resp = self._client.audio.transcriptions.create(
+                model=self._model,
+                file=file_tuple,
+                language=self._language,
+            )
+        else:
+            resp = self._client.audio.transcriptions.create(
+                model=self._model,
+                file=file_tuple,
+            )
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+
+        text = getattr(resp, "text", "") or ""
+        # The transcriptions endpoint doesn't surface a confidence
+        # score on whisper-1; leave it None rather than fabricate.
+        return TranscriptionResult(
+            text=text.strip(),
+            language=self._language,
+            confidence=None,
+            duration_ms=elapsed_ms,
+            transcriber_version=self.version,
         )
 
 
