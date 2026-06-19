@@ -205,6 +205,58 @@ class AuditTailItem:
 
 
 @dataclass(frozen=True)
+class FlowNode:
+    """One node in the agent-flow diagram.
+
+    The view renders these with :func:`components.agent_node` plus
+    a per-node detail line below.
+    """
+
+    name: str            # display label ("ROUTER", "BOOKING")
+    state: Literal["idle", "active", "done", "escalated"]
+    ms: int | None
+    cost_usd: float | None
+    detail: str          # one-line subtitle the view shows under the node
+
+
+# Canonical position keys in the agent-flow diagram. Listed in the
+# order the diagram lays them out left-to-right.
+FlowPosition = Literal[
+    "patient",
+    "router",
+    "specialist",
+    "tools",
+    "sentinel",
+    "response",
+]
+
+
+@dataclass(frozen=True)
+class AgentFlowSnapshot:
+    """One turn's trip through the multi-agent graph.
+
+    Built from a single :class:`TraceEntry`. Carries the activation
+    state for every node + the list of specialists not chosen (so
+    the view can grey them out) + the tools that fired.
+    """
+
+    tenant: str
+    scenario_id: str
+    intent: str
+    user_message: str
+    nodes: dict[str, FlowNode]      # keyed by FlowPosition
+    chosen_specialist: str          # display name, e.g. "Booking"
+    other_specialists: list[str]    # 4 unselected specialists
+    tools_called: list[str]
+    escalation_score: float
+    escalation_reasons: list[str]
+    judge_violations: list[str]
+    final_outcome: str
+    has_data: bool
+    available_turns: list[str]      # scenario ids the view's picker offers
+
+
+@dataclass(frozen=True)
 class SentinelOpsSnapshot:
     """Per-tenant Sentinel Operations Center rollup.
 
@@ -448,6 +500,228 @@ def recent_emergencies(
             )
     items.sort(key=lambda i: i.sort_key, reverse=True)
     return items[:limit]
+
+
+# ---------- Agent Flow ----------
+
+
+# Map a tool name to the specialist that owns it. Mirrors the
+# clarion.multiagent.specialists.* allowed_tools sets. The Info
+# specialist is the fallback when no booking / eligibility /
+# cancel tool fired.
+_TOOL_TO_SPECIALIST: dict[str, str] = {
+    "search_slots":       "Booking",
+    "book_appointment":   "Booking",
+    "check_eligibility":  "Eligibility",
+    "cancel_appointment": "Cancel",
+    "create_pms_task":    "Info",
+}
+
+# Canonical ordered specialist list — drives the "other specialists"
+# grey-out panel.
+_ALL_SPECIALISTS: tuple[str, ...] = (
+    "Booking",
+    "Eligibility",
+    "Info",
+    "Cancel",
+    "Emergency",
+)
+
+
+def build_agent_flow(
+    customer_id: str,
+    *,
+    scenario_id: str | None = None,
+    data_dir: Path | None = None,
+) -> AgentFlowSnapshot:
+    """Reconstruct one turn's path through the multi-agent graph.
+
+    ``scenario_id`` picks which entry to inspect. ``None`` selects
+    the first entry in the trace (sensible default for the view's
+    initial load).
+
+    The trace doesn't directly record which specialist handled the
+    turn — the locked TraceEntry schema predates the multi-agent
+    refactor. We infer it from the tools fired:
+
+      booking tools fired       -> BookingSpecialist
+      eligibility tool fired    -> EligibilitySpecialist
+      cancel tool fired         -> CancelSpecialist
+      emergency outcome OR
+      "emergency" reason fired  -> EmergencySpecialist
+      otherwise                 -> InfoSpecialist (the read-only
+                                   fallback)
+
+    Returns an empty snapshot when no trace data is on disk for
+    the customer. The view interprets that as an empty-state
+    message rather than crashing.
+    """
+    display_name = _humanize(customer_id)
+    try:
+        trace = data_loader.load_trace_report(customer_id, data_dir)
+    except (FileNotFoundError, data_loader.SchemaVersionMismatchError) as exc:
+        log.info("agent flow: tenant %r has no trace: %s", customer_id, exc)
+        return _empty_agent_flow(display_name)
+
+    if not trace.entries:
+        return _empty_agent_flow(display_name)
+
+    available_turns = [e.scenario_id for e in trace.entries]
+    if scenario_id is None:
+        entry = trace.entries[0]
+    else:
+        entry = next(
+            (e for e in trace.entries if e.scenario_id == scenario_id),
+            trace.entries[0],
+        )
+
+    chosen, others = _infer_specialist(entry)
+    nodes = _build_flow_nodes(entry, chosen=chosen)
+
+    return AgentFlowSnapshot(
+        tenant=display_name,
+        scenario_id=entry.scenario_id,
+        intent=entry.intent or "—",
+        user_message=_first_user_message(entry),
+        nodes=nodes,
+        chosen_specialist=chosen,
+        other_specialists=others,
+        tools_called=list(entry.tools_called),
+        escalation_score=entry.escalation_score or 0.0,
+        escalation_reasons=list(entry.escalation_reasons),
+        judge_violations=list(entry.judge_violations),
+        final_outcome=entry.actual_outcome,
+        has_data=True,
+        available_turns=available_turns,
+    )
+
+
+# ---------- Agent Flow internals ----------
+
+
+def _empty_agent_flow(display_name: str) -> AgentFlowSnapshot:
+    return AgentFlowSnapshot(
+        tenant=display_name,
+        scenario_id="—",
+        intent="—",
+        user_message="",
+        nodes={},
+        chosen_specialist="—",
+        other_specialists=list(_ALL_SPECIALISTS),
+        tools_called=[],
+        escalation_score=0.0,
+        escalation_reasons=[],
+        judge_violations=[],
+        final_outcome="—",
+        has_data=False,
+        available_turns=[],
+    )
+
+
+def _infer_specialist(entry: TraceEntry) -> tuple[str, list[str]]:
+    """Pick the specialist that most likely handled this turn.
+
+    Priority order: emergency outcome > emergency reason >
+    tool-to-specialist mapping > Info fallback. Emergency wins
+    over everything because EmergencySpecialist short-circuits in
+    the runner before any tool fires.
+    """
+    if _is_emergency(entry):
+        chosen = "Emergency"
+    else:
+        chosen = "Info"  # default if no tool maps anywhere
+        for tool in entry.tools_called:
+            if tool in _TOOL_TO_SPECIALIST:
+                chosen = _TOOL_TO_SPECIALIST[tool]
+                break
+    others = [name for name in _ALL_SPECIALISTS if name != chosen]
+    return chosen, others
+
+
+def _first_user_message(entry: TraceEntry) -> str:
+    """The TraceEntry doesn't carry the user message directly —
+    we infer a short label from intent + difficulty. That's enough
+    for the view's "Turn driving this flow" header line."""
+    return f"{entry.intent or 'turn'} · {entry.difficulty or 'unknown'}"
+
+
+def _build_flow_nodes(
+    entry: TraceEntry, *, chosen: str
+) -> dict[str, FlowNode]:
+    """Assemble per-position FlowNode dicts for the diagram."""
+    # The trace doesn't time individual graph nodes. We split
+    # duration_ms across the path proportionally — Router + Specialist
+    # take the bulk, Sentinel a slice, Response a small tail.
+    total_ms = int(entry.duration_ms or 0)
+    cost_usd = entry.cost_usd or 0.0
+    tools_count = len(entry.tools_called)
+    escalated = entry.escalation_score is not None and entry.escalation_score >= 0.5
+    emergency = _is_emergency(entry)
+
+    router_ms = int(total_ms * 0.10)
+    specialist_ms = int(total_ms * 0.55)
+    tools_ms = int(total_ms * 0.15)
+    sentinel_ms = int(total_ms * 0.10)
+    # Response slice is whatever rounding left.
+    response_ms = max(0, total_ms - router_ms - specialist_ms - tools_ms - sentinel_ms)
+
+    return {
+        "patient": FlowNode(
+            name="PATIENT",
+            state="done",
+            ms=None,
+            cost_usd=None,
+            detail=f"{entry.intent or 'turn'} · {entry.difficulty or 'unknown'}",
+        ),
+        "router": FlowNode(
+            name="ROUTER",
+            state="done",
+            ms=router_ms or None,
+            cost_usd=cost_usd * 0.10 if cost_usd else None,
+            detail=f"chose {chosen}",
+        ),
+        "specialist": FlowNode(
+            name=chosen.upper(),
+            state="escalated" if emergency else ("done" if not escalated else "active"),
+            ms=specialist_ms or None,
+            cost_usd=cost_usd * 0.55 if cost_usd else None,
+            detail=f"{tools_count} tool{'s' if tools_count != 1 else ''} fired",
+        ),
+        "tools": FlowNode(
+            name="TOOLS",
+            state="done" if tools_count > 0 else "idle",
+            ms=tools_ms or None if tools_count else None,
+            cost_usd=None,
+            detail=", ".join(entry.tools_called[:3]) or "none",
+        ),
+        "sentinel": FlowNode(
+            name="SENTINEL",
+            state="escalated" if escalated else "done",
+            ms=sentinel_ms or None,
+            cost_usd=None,
+            detail=_sentinel_detail(entry),
+        ),
+        "response": FlowNode(
+            name="RESPONSE",
+            state="escalated" if emergency else "done",
+            ms=response_ms or None,
+            cost_usd=cost_usd * 0.10 if cost_usd else None,
+            detail=entry.actual_outcome,
+        ),
+    }
+
+
+def _sentinel_detail(entry: TraceEntry) -> str:
+    """Single-line summary of what Sentinel decided on this turn."""
+    score = entry.escalation_score
+    if score is None:
+        return "score n/a"
+    parts: list[str] = [f"score {score:.2f}"]
+    if entry.judge_hallucination is not None:
+        parts.append(f"halluc {entry.judge_hallucination:.2f}")
+    if entry.judge_violations:
+        parts.append(f"{len(entry.judge_violations)} violation(s)")
+    return " · ".join(parts)
 
 
 # ---------- Sentinel Operations Center ----------
@@ -925,10 +1199,13 @@ def _relative_time(ts: datetime | None) -> str:
 
 
 __all__ = [
+    "AgentFlowSnapshot",
     "AuditTailItem",
     "CostBreakdown",
     "EmergencyItem",
     "EscalationItem",
+    "FlowNode",
+    "FlowPosition",
     "GlobalCostSLO",
     "GlobalKPIs",
     "HealthStatus",
@@ -938,6 +1215,7 @@ __all__ = [
     "SignalContribution",
     "TenantSnapshot",
     "all_tenant_snapshots",
+    "build_agent_flow",
     "build_cost_slo",
     "build_global_kpis",
     "build_sentinel_ops",

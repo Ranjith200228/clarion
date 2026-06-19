@@ -28,7 +28,7 @@ from gradio_app import (
 )
 from gradio_app.data import SchemaVersionMismatchError
 from gradio_app.theme import CLARION_THEME, CSS
-from gradio_app.views import cost_slo, mission_control, sentinel_ops
+from gradio_app.views import agent_flow, cost_slo, mission_control, sentinel_ops
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +69,11 @@ def build_app() -> gr.Blocks:
             # surface. Per-tenant (binds to the customer dropdown).
             with gr.Tab("Sentinel Ops"):
                 so_html = gr.HTML(_render_sentinel_ops(default_customer))
+            # v2 hero #2 — makes the multi-agent reasoning visible.
+            # Per-tenant; binds to the customer dropdown. Phase E or
+            # G will add a scenario-id picker for turn switching.
+            with gr.Tab("Agent Flow"):
+                af_html = gr.HTML(_render_agent_flow(default_customer))
             with gr.Tab("Live Agent"):
                 live = tab_live_agent.build()
             with gr.Tab("Voice Agent"):
@@ -102,6 +107,7 @@ def build_app() -> gr.Blocks:
             )
             mc = _render_mission_control()
             so = _render_sentinel_ops(customer_id)
+            af = _render_agent_flow(customer_id)
             cs = _render_cost_slo()
             try:
                 artifacts = data.load_artifacts(customer_id)
@@ -113,6 +119,7 @@ def build_app() -> gr.Blocks:
                 return (
                     mc,
                     so,
+                    af,
                     *msg_q,
                     *msg_e,
                     *msg_t,
@@ -129,6 +136,7 @@ def build_app() -> gr.Blocks:
                 return (
                     mc,
                     so,
+                    af,
                     *msg_q,
                     *msg_e,
                     *msg_t,
@@ -141,11 +149,12 @@ def build_app() -> gr.Blocks:
             esc = tab_escalations.render(artifacts.report)
             t = tab_trace_explorer.render(artifacts.trace_report)
             new_state = tab_live_agent.set_customer(live_state, customer_id)
-            return (mc, so, *q, *esc, *t, new_state, new_voice_state, cs)
+            return (mc, so, af, *q, *esc, *t, new_state, new_voice_state, cs)
 
         outputs = [
             mc_html,
             so_html,
+            af_html,
             quality.headline_md,
             quality.headline_table,
             quality.outcome_table,
@@ -208,6 +217,17 @@ def _render_sentinel_ops(customer_id: str) -> str:
     """
     ops = data_sources.build_sentinel_ops(customer_id)
     return sentinel_ops.build_html(ops)
+
+
+def _render_agent_flow(customer_id: str) -> str:
+    """Build the Agent Flow HTML for one customer.
+
+    Defaults to the first scenario in the tenant's trace report.
+    The empty-state fall-back inside the view handles "no trace
+    on disk" cleanly.
+    """
+    flow = data_sources.build_agent_flow(customer_id)
+    return agent_flow.build_html(flow)
 
 
 def _render_cost_slo() -> str:
