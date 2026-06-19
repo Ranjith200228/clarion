@@ -381,12 +381,47 @@ def kpi_strip(tiles_html: list[str]) -> str:
     return f'<div class="clarion-kpi-strip">{inner}</div>'
 
 
+# ---------- Phase G: top brand strip ----------
+
+
+def brand_strip(
+    *,
+    version: str,
+    env: str = "live",
+    env_status: Status = "healthy",
+    tagline: str = "Configurable Multi-Agent Healthcare Operations Platform",
+) -> str:
+    """Top app strip — brand mark + name + version + environment badge.
+
+    Sits above the KPI strip in the Phase G shell. The brand strip
+    is the single piece of chrome that NEVER swaps (it's not
+    customer-bound), so it's safe to render statically once and
+    never rebuild.
+    """
+    return (
+        '<div class="clarion-brand-strip">'
+        '<div class="clarion-brand-left">'
+        '<div class="clarion-brand-mark" aria-hidden="true">◐</div>'
+        '<div class="clarion-brand-text">'
+        '<div class="clarion-brand-name">Clarion</div>'
+        f'<div class="clarion-brand-tagline">{_esc(tagline)}</div>'
+        "</div>"
+        "</div>"
+        '<div class="clarion-brand-right">'
+        f'<span class="clarion-brand-version">v{_esc(version)}</span>'
+        + status_badge(env_status, label=env.upper())
+        + "</div>"
+        "</div>"
+    )
+
+
 __all__ = [
     "AgentState",
     "SignalWeight",
     "Status",
     "Trend",
     "agent_node",
+    "brand_strip",
     "cost_chip",
     "incident_row",
     "kpi_strip",

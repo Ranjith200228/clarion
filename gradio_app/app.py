@@ -1,32 +1,48 @@
-"""Phase 14 Gradio Blocks app — four tabs + customer switcher.
+"""Phase G Gradio Blocks app — Clarion mission-control shell.
 
 Entry point::
 
     python -m gradio_app
 
+Shell layout (Phase G):
+
+  ┌───────────────────────────────────────────────────────────┐
+  │ ◐ Clarion · v1.1.0 · LIVE                                 │
+  ├───────────────────────────────────────────────────────────┤
+  │ Customer: [ ophthalmology ▼ ]                             │
+  ├──────────┬────────────────────────────────────────────────┤
+  │ NAV      │ MAIN CANVAS (single active view)               │
+  │  Mission │   Mission Control  · Sentinel Ops  · Agent     │
+  │  Sentinel│   Flow · Voice Intelligence · Healthcare Ops   │
+  │  Agents  │   · Live Agent · Voice Agent · Cost & SLO      │
+  │  ...     │                                                │
+  └──────────┴────────────────────────────────────────────────┘
+
+Tab list (final): Mission Control, Sentinel Ops, Agent Flow, Voice
+Intelligence, Healthcare Ops, Live Agent, Voice Agent, Cost & SLO.
+The three v1 tabs (Quality Metrics, Escalations, Trace Explorer)
+are retired in Phase G — their content fully lives in the v2 views.
+
 Reads ``report_<customer>.json`` + ``trace_<customer>.json`` from
-``CLARION_DATA_DIR`` (default ``data/``) for the Quality, Escalations,
-and Trace Explorer tabs. The Live Agent tab talks to FastAPI at
-``CLARION_API_URL`` (default ``http://localhost:8000``).
+``CLARION_DATA_DIR`` (default ``data/``). The Live Agent tab talks to
+FastAPI at ``CLARION_API_URL`` (default ``http://localhost:8000``).
 """
 
 from __future__ import annotations
 
 import logging
 import os
+from importlib import metadata
 
 import gradio as gr
 
 from gradio_app import (
+    components,
     data,
     data_sources,
-    tab_escalations,
     tab_live_agent,
-    tab_quality,
-    tab_trace_explorer,
     tab_voice_agent,
 )
-from gradio_app.data import SchemaVersionMismatchError
 from gradio_app.theme import CLARION_THEME, CSS
 from gradio_app.views import (
     agent_flow,
@@ -39,70 +55,81 @@ from gradio_app.views import (
 
 log = logging.getLogger(__name__)
 
-TITLE = "Clarion — Configurable Multi-Agent Voice Automation Platform"
+TITLE = "Clarion — Configurable Multi-Agent Healthcare Operations Platform"
+
+
+def _resolve_version() -> str:
+    """Return the installed package version, falling back to ``dev``.
+
+    The brand strip shows this — looking it up via ``importlib.metadata``
+    means the displayed version stays in sync with ``pyproject.toml``
+    without a duplicate constant in code.
+    """
+    try:
+        return metadata.version("clarion")
+    except metadata.PackageNotFoundError:
+        return "dev"
 
 
 def build_app() -> gr.Blocks:
     """Construct the gr.Blocks app.
 
-    Tab order (Phase B): Mission Control sits **first** so the app
-    opens to the recruiter view; Cost & SLO sits **last** as the
-    executive bottom strip. The five v1 tabs (Live Agent, Voice,
-    Quality, Escalations, Trace Explorer) live between, unchanged.
-    Phase G will retire the v1 tabs once their content is fully
-    represented in the v2 views; until then they stay live for
-    backwards compatibility.
+    Phase G shell: top brand strip is always visible; customer
+    switcher sits below it; main canvas hosts the eight live tabs.
+    The left-rail nav appearance comes from CSS that rotates the
+    Gradio tab list to vertical (see style.css §"Phase G — shell").
     """
     customers = data.available_customers()
     default_customer = customers[0]
+    version = _resolve_version()
 
     with gr.Blocks(title=TITLE, theme=CLARION_THEME, css=CSS) as demo:
-        gr.Markdown(f"# {TITLE}")
+        # ---------- Top strip ----------
+        # The brand strip never rebuilds — it's static chrome.
+        gr.HTML(
+            components.brand_strip(
+                version=version,
+                env="live",
+                env_status="healthy",
+            )
+        )
 
+        # Customer switcher sits between the brand strip and the
+        # main canvas so it reads as a tenant context selector,
+        # not a tab control.
         customer_dd = gr.Dropdown(
             choices=customers,
             value=default_customer,
             label="Customer",
-            info="Switches all four tabs to the selected customer's report + traces.",
+            info="Switches every tenant-bound view to the selected customer.",
         )
 
+        # ---------- Main canvas ----------
         with gr.Tabs():
-            # v2: opens here. Cross-tenant snapshot, no customer
-            # binding — Mission Control is intentionally global.
+            # v2 default landing — cross-tenant snapshot.
             with gr.Tab("Mission Control"):
                 mc_html = gr.HTML(_render_mission_control())
-            # v2 hero — primary feature per the Phase 0 plan. The
-            # trust engine has zero UI in v1; this is its dedicated
-            # surface. Per-tenant (binds to the customer dropdown).
+            # v2 hero #1 — the trust engine surfaced.
             with gr.Tab("Sentinel Ops"):
                 so_html = gr.HTML(_render_sentinel_ops(default_customer))
-            # v2 hero #2 — makes the multi-agent reasoning visible.
-            # Per-tenant; binds to the customer dropdown. Phase E or
-            # G will add a scenario-id picker for turn switching.
+            # v2 hero #2 — multi-agent reasoning visualised.
             with gr.Tab("Agent Flow"):
                 af_html = gr.HTML(_render_agent_flow(default_customer))
-            # v2 hero #3 — emotion analytics + frustration trace +
-            # escalation prediction + voice pipeline reference.
-            # Per-tenant; aggregates over the chat trace as a proxy
-            # for live voice data (Phase 0 doc: trace doesn't
-            # currently carry voice-specific data).
+            # v2 hero #3 — emotion + frustration + voice pipeline.
             with gr.Tab("Voice Intelligence"):
                 vi_html = gr.HTML(_render_voice_intel(default_customer))
-            # v2 domain intelligence — provider availability,
-            # no-show risk, PMS queue, eligibility coverage.
-            # Closes the "doesn't feel healthcare-shaped" gap.
+            # v2 domain intelligence — provider availability, no-show
+            # risk, eligibility, PMS queue.
             with gr.Tab("Healthcare Ops"):
                 ho_html = gr.HTML(_render_healthcare_ops(default_customer))
+            # v1 interactive surfaces — the only callable agents.
+            # Kept because they cannot be replaced by a read-only
+            # view: the user types or speaks into them.
             with gr.Tab("Live Agent"):
                 live = tab_live_agent.build()
             with gr.Tab("Voice Agent"):
                 voice = tab_voice_agent.build()
-            with gr.Tab("Quality Metrics"):
-                quality = tab_quality.build()
-            with gr.Tab("Escalations"):
-                escalations = tab_escalations.build()
-            with gr.Tab("Trace Explorer"):
-                traces = tab_trace_explorer.build()
+            # Executive bottom strip — cross-tenant cost + SLO.
             with gr.Tab("Cost & SLO"):
                 cs_html = gr.HTML(_render_cost_slo())
 
@@ -111,12 +138,12 @@ def build_app() -> gr.Blocks:
             live_state: tab_live_agent.LiveAgentState,
             voice_state: tab_voice_agent.VoiceAgentState,
         ):
-            """Reload every tab.
+            """Reload every view that depends on the customer dropdown.
 
             Mission Control + Cost & SLO are cross-tenant — they
-            rebuild on every customer switch too so a viewer who
-            toggles ophthalmology -> orthopedics sees the executive
-            view stay current with whatever was just loaded.
+            still rebuild on every switch so a viewer toggling
+            ophthalmology -> orthopedics sees the executive view
+            stay current with whatever was just loaded.
             """
             new_voice_state = tab_voice_agent.VoiceAgentState(
                 customer_id=customer_id,
@@ -130,51 +157,8 @@ def build_app() -> gr.Blocks:
             vi = _render_voice_intel(customer_id)
             ho = _render_healthcare_ops(customer_id)
             cs = _render_cost_slo()
-            try:
-                artifacts = data.load_artifacts(customer_id)
-            except FileNotFoundError as e:
-                msg_q = tab_quality.render_empty(customer_id, str(e))
-                msg_e = tab_escalations.render_empty(customer_id, str(e))
-                msg_t = tab_trace_explorer.render_empty(customer_id, str(e))
-                new_state = tab_live_agent.set_customer(live_state, customer_id)
-                return (
-                    mc,
-                    so,
-                    af,
-                    vi,
-                    ho,
-                    *msg_q,
-                    *msg_e,
-                    *msg_t,
-                    new_state,
-                    new_voice_state,
-                    cs,
-                )
-            except SchemaVersionMismatchError as e:
-                reason = f"schema version mismatch: {e}"
-                msg_q = tab_quality.render_empty(customer_id, reason)
-                msg_e = tab_escalations.render_empty(customer_id, reason)
-                msg_t = tab_trace_explorer.render_empty(customer_id, reason)
-                new_state = tab_live_agent.set_customer(live_state, customer_id)
-                return (
-                    mc,
-                    so,
-                    af,
-                    vi,
-                    ho,
-                    *msg_q,
-                    *msg_e,
-                    *msg_t,
-                    new_state,
-                    new_voice_state,
-                    cs,
-                )
-
-            q = tab_quality.render(artifacts.report)
-            esc = tab_escalations.render(artifacts.report)
-            t = tab_trace_explorer.render(artifacts.trace_report)
-            new_state = tab_live_agent.set_customer(live_state, customer_id)
-            return (mc, so, af, vi, ho, *q, *esc, *t, new_state, new_voice_state, cs)
+            new_live_state = tab_live_agent.set_customer(live_state, customer_id)
+            return (mc, so, af, vi, ho, new_live_state, new_voice_state, cs)
 
         outputs = [
             mc_html,
@@ -182,21 +166,12 @@ def build_app() -> gr.Blocks:
             af_html,
             vi_html,
             ho_html,
-            quality.headline_md,
-            quality.headline_table,
-            quality.outcome_table,
-            escalations.summary_md,
-            escalations.reasons_table,
-            escalations.escalated_table,
-            escalations.threshold_md,
-            traces.summary_md,
-            traces.table,
             live.state,
             voice.state,
             cs_html,
         ]
 
-        # Switcher change fans out to every tab.
+        # Switcher change fans out to every customer-bound view.
         customer_dd.change(
             fn=refresh_all,
             inputs=[customer_dd, live.state, voice.state],

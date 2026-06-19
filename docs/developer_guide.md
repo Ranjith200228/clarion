@@ -171,8 +171,10 @@ Same one-way dependency graph the Phase 13 spec mandates:
    `HarnessReport.results` or `traces.jsonl` summaries.
 3. Wire it into the `EvaluationMetrics(...)` construction at the
    bottom of `_metrics_for`.
-4. Surface it in the Quality tab in
-   `gradio_app/tab_quality.py` (UI renders only — no math).
+4. Surface it in the Mission Control headline strip in
+   `gradio_app/views/mission_control.py` (or the most relevant v2
+   view — Sentinel Ops, Cost & SLO, etc.). UI renders only — no
+   math.
 5. Test in `tests/evaluation/test_metrics.py`.
 
 If the metric is a derived breakdown (e.g. outcome distribution),

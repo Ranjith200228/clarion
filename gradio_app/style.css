@@ -412,3 +412,102 @@
     letter-spacing: 0.04em;
     margin-bottom: var(--sp-3);
 }
+
+
+/* ============================================================
+ * Phase G — shell
+ * ============================================================ */
+
+/* Top brand strip — always-visible chrome above the KPI strip. */
+.clarion-brand-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-4);
+    padding: var(--sp-3) var(--sp-5);
+    background: var(--c-bg-panel);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-lg);
+}
+.clarion-brand-left {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+}
+.clarion-brand-mark {
+    font-size: var(--fs-2xl);
+    color: var(--c-accent);
+    line-height: 1;
+}
+.clarion-brand-name {
+    font-size: var(--fs-xl);
+    font-weight: var(--fw-bold);
+    color: var(--c-text-strong);
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+}
+.clarion-brand-tagline {
+    font-size: var(--fs-xs);
+    color: var(--c-text-muted);
+}
+.clarion-brand-right {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+}
+.clarion-brand-version {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--c-text-muted);
+    padding: 2px var(--sp-2);
+    background: var(--c-bg-subtle);
+    border-radius: var(--r-sm);
+}
+
+/* Left-rail tab nav.
+ *
+ * Targets Gradio's tab list via the ARIA role attribute, which is
+ * stable across versions (every tab list in any conventional
+ * widget library carries role="tablist"). We deliberately do NOT
+ * target Gradio's internal class names. Worst case if Gradio
+ * changes its tab markup: the tabs fall back to their default
+ * horizontal layout — visually less impressive but functional.
+ *
+ * The selector is scoped under .gradio-container so we don't risk
+ * styling tab widgets inside our own gr.HTML blocks.
+ */
+.gradio-container [role="tablist"] {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    flex-wrap: nowrap !important;
+    min-width: 220px;
+    max-width: 240px;
+    padding: var(--sp-3);
+    gap: var(--sp-1);
+    background: var(--c-bg-panel);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-lg);
+    margin-right: var(--sp-4);
+}
+.gradio-container [role="tablist"] button[role="tab"] {
+    text-align: left !important;
+    padding: var(--sp-2) var(--sp-3) !important;
+    border-radius: var(--r-md) !important;
+    border: none !important;
+    background: transparent !important;
+    color: var(--c-text-muted) !important;
+    font-size: var(--fs-sm) !important;
+    font-weight: var(--fw-medium) !important;
+    transition: background var(--t-fast) var(--ease-out),
+                color var(--t-fast) var(--ease-out);
+}
+.gradio-container [role="tablist"] button[role="tab"]:hover {
+    background: var(--c-bg-subtle) !important;
+    color: var(--c-text-strong) !important;
+}
+.gradio-container [role="tablist"] button[role="tab"].selected,
+.gradio-container [role="tablist"] button[role="tab"][aria-selected="true"] {
+    background: var(--c-bg-subtle) !important;
+    color: var(--c-accent) !important;
+    font-weight: var(--fw-semibold) !important;
+}
