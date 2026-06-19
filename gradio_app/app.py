@@ -28,7 +28,13 @@ from gradio_app import (
 )
 from gradio_app.data import SchemaVersionMismatchError
 from gradio_app.theme import CLARION_THEME, CSS
-from gradio_app.views import agent_flow, cost_slo, mission_control, sentinel_ops
+from gradio_app.views import (
+    agent_flow,
+    cost_slo,
+    mission_control,
+    sentinel_ops,
+    voice_intel,
+)
 
 log = logging.getLogger(__name__)
 
@@ -74,6 +80,13 @@ def build_app() -> gr.Blocks:
             # G will add a scenario-id picker for turn switching.
             with gr.Tab("Agent Flow"):
                 af_html = gr.HTML(_render_agent_flow(default_customer))
+            # v2 hero #3 — emotion analytics + frustration trace +
+            # escalation prediction + voice pipeline reference.
+            # Per-tenant; aggregates over the chat trace as a proxy
+            # for live voice data (Phase 0 doc: trace doesn't
+            # currently carry voice-specific data).
+            with gr.Tab("Voice Intelligence"):
+                vi_html = gr.HTML(_render_voice_intel(default_customer))
             with gr.Tab("Live Agent"):
                 live = tab_live_agent.build()
             with gr.Tab("Voice Agent"):
@@ -108,6 +121,7 @@ def build_app() -> gr.Blocks:
             mc = _render_mission_control()
             so = _render_sentinel_ops(customer_id)
             af = _render_agent_flow(customer_id)
+            vi = _render_voice_intel(customer_id)
             cs = _render_cost_slo()
             try:
                 artifacts = data.load_artifacts(customer_id)
@@ -120,6 +134,7 @@ def build_app() -> gr.Blocks:
                     mc,
                     so,
                     af,
+                    vi,
                     *msg_q,
                     *msg_e,
                     *msg_t,
@@ -137,6 +152,7 @@ def build_app() -> gr.Blocks:
                     mc,
                     so,
                     af,
+                    vi,
                     *msg_q,
                     *msg_e,
                     *msg_t,
@@ -149,12 +165,13 @@ def build_app() -> gr.Blocks:
             esc = tab_escalations.render(artifacts.report)
             t = tab_trace_explorer.render(artifacts.trace_report)
             new_state = tab_live_agent.set_customer(live_state, customer_id)
-            return (mc, so, af, *q, *esc, *t, new_state, new_voice_state, cs)
+            return (mc, so, af, vi, *q, *esc, *t, new_state, new_voice_state, cs)
 
         outputs = [
             mc_html,
             so_html,
             af_html,
+            vi_html,
             quality.headline_md,
             quality.headline_table,
             quality.outcome_table,
@@ -228,6 +245,17 @@ def _render_agent_flow(customer_id: str) -> str:
     """
     flow = data_sources.build_agent_flow(customer_id)
     return agent_flow.build_html(flow)
+
+
+def _render_voice_intel(customer_id: str) -> str:
+    """Build the Voice Intelligence HTML for one customer.
+
+    Per-tenant; emotion + frustration + escalation rate rolled from
+    the chat trace, plus static voice-pipeline reference + sample
+    transcript that ship regardless of data state.
+    """
+    vi = data_sources.build_voice_intelligence(customer_id)
+    return voice_intel.build_html(vi)
 
 
 def _render_cost_slo() -> str:

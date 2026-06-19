@@ -205,6 +205,72 @@ class AuditTailItem:
 
 
 @dataclass(frozen=True)
+class EmotionTotal:
+    """One row in the emotion distribution chart.
+
+    Voice Intelligence categorizes each turn into one of six
+    emotions based on its escalation reasons + outcome. The mapping
+    is heuristic (regex over the locked TraceEntry fields) — we don't
+    have a sentiment model in production, and inventing one for the
+    dashboard would mask what the existing engine actually sees.
+    """
+
+    emotion: str
+    count: int
+    fraction: float          # count / total_turns (0..1)
+
+
+@dataclass(frozen=True)
+class FrustrationPoint:
+    """One sample in the frustration-over-turns line chart.
+
+    ``score`` is the entry's escalation_score, used as a proxy for
+    composite frustration. The locked schema doesn't separately
+    record per-turn frustration — the EscalationScorer fuses
+    frustration with the other 4 signals at composite time — so we
+    visualize what we have rather than fabricating a richer field.
+    """
+
+    turn_index: int
+    scenario_id: str
+    score: float
+    escalated: bool
+
+
+@dataclass(frozen=True)
+class VoicePipelineStage:
+    """One stage in the voice round-trip target diagram."""
+
+    name: str                # "STT", "Agent", "TTS"
+    target_ms: int
+    description: str         # one-line explainer
+
+
+@dataclass(frozen=True)
+class VoiceIntelligenceSnapshot:
+    """Per-tenant rollup for the Voice Intelligence view.
+
+    The dashboard intentionally mixes two data sources:
+      * Chat trace (this rolls up emotion / frustration / escalation
+        rate the engine actually saw across the scenario corpus).
+      * Static voice pipeline targets (the budget the M5 voice
+        layer is built against — STT / agent / TTS in series).
+    The view labels each section so a reader knows which is which.
+    """
+
+    tenant: str
+    has_data: bool
+    total_turns: int
+    emotions: list[EmotionTotal]
+    frustration_trace: list[FrustrationPoint]
+    mean_frustration: float
+    escalation_rate: float           # historical fraction (0..1)
+    predicted_escalation_rate: float  # smoothed Bayesian estimate
+    voice_pipeline: list[VoicePipelineStage]
+    sample_transcript: list[tuple[str, float]]  # (token, confidence) pairs
+
+
+@dataclass(frozen=True)
 class FlowNode:
     """One node in the agent-flow diagram.
 
@@ -500,6 +566,224 @@ def recent_emergencies(
             )
     items.sort(key=lambda i: i.sort_key, reverse=True)
     return items[:limit]
+
+
+# ---------- Voice Intelligence ----------
+
+
+# Six emotions matching what the vision brief calls out. Order
+# matters — the view renders them in this sequence and stable
+# ordering helps a viewer scan across customers.
+_EMOTION_ORDER: tuple[str, ...] = (
+    "calm",
+    "anxious",
+    "confused",
+    "frustrated",
+    "urgent",
+    "distressed",
+)
+
+
+def _classify_emotion(entry: TraceEntry) -> str:
+    """Heuristic emotion bucket for one turn.
+
+    Maps the escalation reasons + outcome into one of six emotions.
+    Priority order (highest wins):
+
+      distressed   emergency outcome OR emergency reason
+      urgent       difficulty == emergency OR intent emergency
+      frustrated   any "frustration" reason
+      confused     any "repeated_clarification" reason
+      anxious      any "low_confidence" reason
+      calm         default
+
+    Heuristic on purpose — the engine doesn't currently surface a
+    per-turn sentiment score, and inventing one in the dashboard
+    would mask what Sentinel actually sees.
+    """
+    if _is_emergency(entry):
+        return "distressed"
+    if (entry.intent or "").lower() == "emergency" or (
+        entry.difficulty or ""
+    ).lower() == "emergency":
+        return "urgent"
+    reasons = " ".join(entry.escalation_reasons).lower()
+    if "frustration" in reasons:
+        return "frustrated"
+    if "clarification" in reasons:
+        return "confused"
+    if "low_confidence" in reasons:
+        return "anxious"
+    return "calm"
+
+
+def _predicted_escalation_rate(
+    n_escalated: int, n_total: int, *, alpha: float = 2.0, beta: float = 8.0
+) -> float:
+    """Smoothed Beta-binomial estimate of the next-turn escalation rate.
+
+    Pure historical rate is brittle for tiny samples (one
+    escalation in two turns is not 50%). The Beta prior pulls a
+    tiny sample back toward the prior mean (alpha / (alpha + beta) =
+    0.20). Default prior strength = 10 turns, which matches the
+    intuition that "we need ~10 turns before the data dominates."
+    """
+    if n_total <= 0:
+        return alpha / (alpha + beta)
+    return (n_escalated + alpha) / (n_total + alpha + beta)
+
+
+# Pinned voice-pipeline budgets from the M5 Voice Layer plan. Used
+# by the view to show a target-vs-budget bar chart even when the
+# tenant has no live voice traces yet (which is most of the time).
+_VOICE_PIPELINE: tuple[VoicePipelineStage, ...] = (
+    VoicePipelineStage(
+        name="STT",
+        target_ms=500,
+        description="OpenAI Whisper-1 transcribes the patient utterance.",
+    ),
+    VoicePipelineStage(
+        name="Agent",
+        target_ms=1500,
+        description="Router -> specialist -> tools -> sentinel pipeline.",
+    ),
+    VoicePipelineStage(
+        name="TTS",
+        target_ms=600,
+        description="OpenAI TTS streams the response audio back.",
+    ),
+)
+
+
+# A small synthetic transcript used by the view's "Live Transcript"
+# panel when no live turn is available. The view labels this clearly
+# so the viewer knows it's an illustration, not a recorded turn.
+# Confidence shading mimics what an STT engine surfaces — high on
+# common words, lower on proper nouns + clinical terms.
+_SAMPLE_TRANSCRIPT: tuple[tuple[str, float], ...] = (
+    ("Hi,", 0.99),
+    ("this", 0.99),
+    ("is", 0.99),
+    ("Jane", 0.91),
+    ("Smith.", 0.88),
+    ("I'd", 0.96),
+    ("like", 0.99),
+    ("to", 0.99),
+    ("book", 0.99),
+    ("a", 0.99),
+    ("cataract", 0.78),
+    ("pre-op", 0.74),
+    ("consult", 0.85),
+    ("with", 0.99),
+    ("Dr.", 0.95),
+    ("Patel,", 0.69),
+    ("any", 0.97),
+    ("morning", 0.94),
+    ("next", 0.99),
+    ("Tuesday.", 0.89),
+)
+
+
+def build_voice_intelligence(
+    customer_id: str,
+    *,
+    data_dir: Path | None = None,
+) -> VoiceIntelligenceSnapshot:
+    """Build the Voice Intelligence rollup for one customer.
+
+    Sources:
+      * TraceReport.entries — classified into 6 emotions, plus the
+        escalation_score time series for the frustration trace.
+      * Static voice-pipeline targets (the M5 budget).
+      * Static illustrative transcript (the live-mic path doesn't
+        leave persisted artifacts; the view labels this clearly).
+
+    Returns has_data=False shape when no trace on disk for the
+    tenant.
+    """
+    display_name = _humanize(customer_id)
+    try:
+        trace = data_loader.load_trace_report(customer_id, data_dir)
+    except (FileNotFoundError, data_loader.SchemaVersionMismatchError) as exc:
+        log.info(
+            "voice intelligence: tenant %r has no trace: %s",
+            customer_id,
+            exc,
+        )
+        return _empty_voice_intelligence(display_name)
+
+    entries = trace.entries
+    if not entries:
+        return _empty_voice_intelligence(display_name)
+
+    # Emotion distribution.
+    emotion_counts: dict[str, int] = dict.fromkeys(_EMOTION_ORDER, 0)
+    for e in entries:
+        bucket = _classify_emotion(e)
+        emotion_counts[bucket] += 1
+    total = len(entries)
+    emotions = [
+        EmotionTotal(
+            emotion=name,
+            count=emotion_counts[name],
+            fraction=emotion_counts[name] / total if total else 0.0,
+        )
+        for name in _EMOTION_ORDER
+    ]
+
+    # Frustration trace — chrono order across entries.
+    frustration_trace: list[FrustrationPoint] = []
+    for idx, e in enumerate(entries):
+        frustration_trace.append(
+            FrustrationPoint(
+                turn_index=idx,
+                scenario_id=e.scenario_id,
+                score=e.escalation_score or 0.0,
+                escalated=(e.escalation_score or 0.0) >= 0.5,
+            )
+        )
+    mean_frustration = (
+        statistics.fmean(p.score for p in frustration_trace)
+        if frustration_trace
+        else 0.0
+    )
+    escalated = sum(1 for p in frustration_trace if p.escalated)
+    escalation_rate = escalated / total if total else 0.0
+    predicted = _predicted_escalation_rate(escalated, total)
+
+    return VoiceIntelligenceSnapshot(
+        tenant=display_name,
+        has_data=True,
+        total_turns=total,
+        emotions=emotions,
+        frustration_trace=frustration_trace,
+        mean_frustration=round(mean_frustration, 4),
+        escalation_rate=round(escalation_rate, 4),
+        predicted_escalation_rate=round(predicted, 4),
+        voice_pipeline=list(_VOICE_PIPELINE),
+        sample_transcript=list(_SAMPLE_TRANSCRIPT),
+    )
+
+
+def _empty_voice_intelligence(display_name: str) -> VoiceIntelligenceSnapshot:
+    """has_data=False shape — still ships the voice pipeline targets
+    + sample transcript so the view's lower panels render even on a
+    fresh deploy with zero scored turns."""
+    return VoiceIntelligenceSnapshot(
+        tenant=display_name,
+        has_data=False,
+        total_turns=0,
+        emotions=[
+            EmotionTotal(emotion=name, count=0, fraction=0.0)
+            for name in _EMOTION_ORDER
+        ],
+        frustration_trace=[],
+        mean_frustration=0.0,
+        escalation_rate=0.0,
+        predicted_escalation_rate=_predicted_escalation_rate(0, 0),
+        voice_pipeline=list(_VOICE_PIPELINE),
+        sample_transcript=list(_SAMPLE_TRANSCRIPT),
+    )
 
 
 # ---------- Agent Flow ----------
@@ -1203,9 +1487,11 @@ __all__ = [
     "AuditTailItem",
     "CostBreakdown",
     "EmergencyItem",
+    "EmotionTotal",
     "EscalationItem",
     "FlowNode",
     "FlowPosition",
+    "FrustrationPoint",
     "GlobalCostSLO",
     "GlobalKPIs",
     "HealthStatus",
@@ -1214,12 +1500,15 @@ __all__ = [
     "SentinelOpsSnapshot",
     "SignalContribution",
     "TenantSnapshot",
+    "VoiceIntelligenceSnapshot",
+    "VoicePipelineStage",
     "all_tenant_snapshots",
     "build_agent_flow",
     "build_cost_slo",
     "build_global_kpis",
     "build_sentinel_ops",
     "build_tenant_snapshot",
+    "build_voice_intelligence",
     "recent_emergencies",
     "recent_escalations",
 ]
