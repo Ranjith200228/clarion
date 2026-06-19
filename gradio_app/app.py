@@ -31,6 +31,7 @@ from gradio_app.theme import CLARION_THEME, CSS
 from gradio_app.views import (
     agent_flow,
     cost_slo,
+    healthcare_ops,
     mission_control,
     sentinel_ops,
     voice_intel,
@@ -87,6 +88,11 @@ def build_app() -> gr.Blocks:
             # currently carry voice-specific data).
             with gr.Tab("Voice Intelligence"):
                 vi_html = gr.HTML(_render_voice_intel(default_customer))
+            # v2 domain intelligence — provider availability,
+            # no-show risk, PMS queue, eligibility coverage.
+            # Closes the "doesn't feel healthcare-shaped" gap.
+            with gr.Tab("Healthcare Ops"):
+                ho_html = gr.HTML(_render_healthcare_ops(default_customer))
             with gr.Tab("Live Agent"):
                 live = tab_live_agent.build()
             with gr.Tab("Voice Agent"):
@@ -122,6 +128,7 @@ def build_app() -> gr.Blocks:
             so = _render_sentinel_ops(customer_id)
             af = _render_agent_flow(customer_id)
             vi = _render_voice_intel(customer_id)
+            ho = _render_healthcare_ops(customer_id)
             cs = _render_cost_slo()
             try:
                 artifacts = data.load_artifacts(customer_id)
@@ -135,6 +142,7 @@ def build_app() -> gr.Blocks:
                     so,
                     af,
                     vi,
+                    ho,
                     *msg_q,
                     *msg_e,
                     *msg_t,
@@ -153,6 +161,7 @@ def build_app() -> gr.Blocks:
                     so,
                     af,
                     vi,
+                    ho,
                     *msg_q,
                     *msg_e,
                     *msg_t,
@@ -165,13 +174,14 @@ def build_app() -> gr.Blocks:
             esc = tab_escalations.render(artifacts.report)
             t = tab_trace_explorer.render(artifacts.trace_report)
             new_state = tab_live_agent.set_customer(live_state, customer_id)
-            return (mc, so, af, vi, *q, *esc, *t, new_state, new_voice_state, cs)
+            return (mc, so, af, vi, ho, *q, *esc, *t, new_state, new_voice_state, cs)
 
         outputs = [
             mc_html,
             so_html,
             af_html,
             vi_html,
+            ho_html,
             quality.headline_md,
             quality.headline_table,
             quality.outcome_table,
@@ -256,6 +266,16 @@ def _render_voice_intel(customer_id: str) -> str:
     """
     vi = data_sources.build_voice_intelligence(customer_id)
     return voice_intel.build_html(vi)
+
+
+def _render_healthcare_ops(customer_id: str) -> str:
+    """Build the Healthcare Operations HTML for one customer.
+
+    Per-tenant; aggregates over SQLite + M1 PMS writeback + M3
+    predictions (or synthetic fallback). All read-only.
+    """
+    ops = data_sources.build_healthcare_ops(customer_id)
+    return healthcare_ops.build_html(ops)
 
 
 def _render_cost_slo() -> str:

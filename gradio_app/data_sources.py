@@ -205,6 +205,80 @@ class AuditTailItem:
 
 
 @dataclass(frozen=True)
+class ProviderUtilization:
+    """Per-provider availability cell for the heat map row.
+
+    ``utilization`` is in [0, 1] where 0 = no slots booked, 1 =
+    every slot booked. ``status`` is the colour band the view
+    paints the cell with.
+    """
+
+    provider_id: str
+    provider_name: str
+    slots_total: int
+    slots_booked: int
+    utilization: float
+    daily: list[float]              # per-day utilization for the 14-day grid
+    status: Literal["healthy", "warning", "critical", "unknown"]
+
+
+@dataclass(frozen=True)
+class NoShowRiskBucket:
+    """One bar in the no-show histogram."""
+
+    band: Literal["low", "medium", "high"]
+    count: int
+    fraction: float
+
+
+@dataclass(frozen=True)
+class PmsTaskRow:
+    """One row in the PMS task queue panel."""
+
+    task_id: str
+    subject: str
+    priority: Literal["normal", "urgent"]
+    assignee_group: str
+    patient_id: str | None
+    created_at: str                  # display-only, "yesterday" etc.
+
+
+@dataclass(frozen=True)
+class EligibilitySummary:
+    """One slice of the eligibility coverage donut."""
+
+    status: str                      # active / pending / denied / unknown
+    count: int
+    fraction: float
+
+
+@dataclass(frozen=True)
+class HealthcareOpsSnapshot:
+    """Per-tenant rollup for the Healthcare Operations view.
+
+    Mixes four data sources:
+      * structured.sqlite3 -> providers + availability + eligibility
+      * M3 NoShowPrediction.predictions.jsonl when present, otherwise
+        a synthetic distribution computed from M3 dataset
+      * M1 pms_writeback/<conv>/task.json artifacts
+    The view labels each section so a reader knows which is which.
+    """
+
+    tenant: str
+    has_structured: bool             # whether SQLite store exists
+    providers: list[ProviderUtilization]
+    days_in_grid: int                # always 14 (label shorthand)
+    avg_utilization: float
+    no_show_buckets: list[NoShowRiskBucket]
+    no_show_total: int
+    no_show_mean_risk: float
+    pms_tasks: list[PmsTaskRow]
+    pms_open_count: int
+    eligibility: list[EligibilitySummary]
+    eligibility_total: int
+
+
+@dataclass(frozen=True)
 class EmotionTotal:
     """One row in the emotion distribution chart.
 
@@ -566,6 +640,347 @@ def recent_emergencies(
             )
     items.sort(key=lambda i: i.sort_key, reverse=True)
     return items[:limit]
+
+
+# ---------- Healthcare Operations ----------
+
+
+# Number of days the provider heat map paints. Fixed because the
+# view renders a static 14-column grid; if we ever change this,
+# the view + CSS need to know.
+_HEALTHCARE_GRID_DAYS = 14
+
+
+def build_healthcare_ops(
+    customer_id: str,
+    *,
+    data_dir: Path | None = None,
+) -> HealthcareOpsSnapshot:
+    """Build the per-tenant Healthcare Operations rollup.
+
+    Reads from up to three on-disk surfaces (any of which may be
+    absent on a fresh deploy — the empty-state path produces a
+    well-formed snapshot):
+
+      * SQLite at ``<data_dir>/<customer>/structured.sqlite3`` for
+        providers + availability + eligibility.
+      * M3 predictions at
+        ``<data_dir>/<customer>/no_show_prediction/predictions.jsonl``.
+        When missing, we fall back to synthesising from the M3
+        dataset generator so the panel still renders.
+      * M1 PMS writeback at
+        ``<data_dir>/<customer>/pms_writeback/<conv>/task.json``.
+    """
+    base = data_dir if data_dir is not None else data_loader.DEFAULT_DATA_DIR
+    tenant = _humanize(customer_id)
+
+    providers, avg_util = _read_provider_heatmap(customer_id, base)
+    no_show_buckets, no_show_total, no_show_mean = _read_no_show_distribution(
+        customer_id, base
+    )
+    pms_tasks = _read_pms_tasks(customer_id, base)
+    eligibility, eligibility_total = _read_eligibility(customer_id, base)
+
+    return HealthcareOpsSnapshot(
+        tenant=tenant,
+        has_structured=any(p.slots_total > 0 for p in providers),
+        providers=providers,
+        days_in_grid=_HEALTHCARE_GRID_DAYS,
+        avg_utilization=round(avg_util, 4),
+        no_show_buckets=no_show_buckets,
+        no_show_total=no_show_total,
+        no_show_mean_risk=round(no_show_mean, 4),
+        pms_tasks=pms_tasks,
+        pms_open_count=sum(1 for t in pms_tasks if t.priority in {"normal", "urgent"}),
+        eligibility=eligibility,
+        eligibility_total=eligibility_total,
+    )
+
+
+# ---------- Healthcare Ops internals ----------
+
+
+def _read_provider_heatmap(
+    customer_id: str, base: Path
+) -> tuple[list[ProviderUtilization], float]:
+    """Read providers + availability from SQLite and aggregate.
+
+    For each provider x day, we compute is_booked / total slots
+    over the next 14 days starting today (UTC). Provider rows
+    without any slot in that window still appear (zeroed) so the
+    grid stays a rectangle.
+
+    Returns ``([], 0.0)`` when the SQLite file is missing — the
+    view interprets that as the empty-state.
+    """
+    sqlite_path = base / customer_id / "structured.sqlite3"
+    if not sqlite_path.is_file():
+        return [], 0.0
+
+    import sqlite3
+    from datetime import date, timedelta
+
+    today = date.today()
+    days = [today + timedelta(days=i) for i in range(_HEALTHCARE_GRID_DAYS)]
+    days_str = [d.isoformat() for d in days]
+
+    rows: list[ProviderUtilization] = []
+    overall_total = 0
+    overall_booked = 0
+    try:
+        with sqlite3.connect(sqlite_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            providers = cur.execute(
+                "SELECT provider_id, full_name FROM providers ORDER BY full_name"
+            ).fetchall()
+            for prov in providers:
+                pid = str(prov["provider_id"])
+                pname = str(prov["full_name"])
+                # Single query to pull this provider's slots in the
+                # 14-day window.
+                slots = cur.execute(
+                    """
+                    SELECT slot_date, is_booked
+                    FROM availability
+                    WHERE provider_id = ?
+                      AND slot_date BETWEEN ? AND ?
+                    """,
+                    (pid, days_str[0], days_str[-1]),
+                ).fetchall()
+                per_day_total: dict[str, int] = {d: 0 for d in days_str}
+                per_day_booked: dict[str, int] = {d: 0 for d in days_str}
+                for s in slots:
+                    d = str(s["slot_date"])
+                    if d in per_day_total:
+                        per_day_total[d] += 1
+                        if int(s["is_booked"] or 0):
+                            per_day_booked[d] += 1
+                daily = [
+                    per_day_booked[d] / per_day_total[d] if per_day_total[d] else 0.0
+                    for d in days_str
+                ]
+                slots_total = sum(per_day_total.values())
+                slots_booked = sum(per_day_booked.values())
+                util = slots_booked / slots_total if slots_total else 0.0
+                overall_total += slots_total
+                overall_booked += slots_booked
+                rows.append(
+                    ProviderUtilization(
+                        provider_id=pid,
+                        provider_name=pname,
+                        slots_total=slots_total,
+                        slots_booked=slots_booked,
+                        utilization=round(util, 4),
+                        daily=[round(x, 4) for x in daily],
+                        status=_utilization_status(util, slots_total),
+                    )
+                )
+    except sqlite3.DatabaseError as exc:
+        log.warning("provider heatmap: sqlite error for %r: %s", customer_id, exc)
+        return [], 0.0
+
+    avg = overall_booked / overall_total if overall_total else 0.0
+    return rows, avg
+
+
+def _utilization_status(
+    util: float, slots_total: int
+) -> Literal["healthy", "warning", "critical", "unknown"]:
+    """Map a 0..1 utilization into a colour band.
+
+    Both "no slots at all" and "no booked slots" land in unknown
+    so the heat map doesn't paint empty rows as healthy.
+    """
+    if slots_total == 0:
+        return "unknown"
+    if util >= 0.85:
+        return "critical"   # over-booked, can't take walk-ins
+    if util >= 0.60:
+        return "warning"
+    if util >= 0.30:
+        return "healthy"
+    return "unknown"        # under-utilised
+
+
+def _read_no_show_distribution(
+    customer_id: str, base: Path
+) -> tuple[list[NoShowRiskBucket], int, float]:
+    """Read or synthesise a no-show risk distribution.
+
+    Priority:
+      1. M3 predictions file on disk.
+      2. Synthetic distribution from the M3 dataset generator
+         (using the customer_id as the seed so each tenant gets a
+         distinct shape).
+
+    Returns three buckets (low / medium / high) plus the sample
+    size and mean p_no_show.
+    """
+    counts = {"low": 0, "medium": 0, "high": 0}
+    p_values: list[float] = []
+
+    predictions_path = (
+        base / customer_id / "no_show_prediction" / "predictions.jsonl"
+    )
+    if predictions_path.is_file():
+        try:
+            with predictions_path.open("r", encoding="utf-8") as f:
+                for raw in f:
+                    raw = raw.strip()
+                    if not raw:
+                        continue
+                    try:
+                        record = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    p = record.get("p_no_show")
+                    band = record.get("risk_band")
+                    if isinstance(p, int | float) and isinstance(band, str):
+                        if band in counts:
+                            counts[band] += 1
+                        p_values.append(float(p))
+        except OSError:
+            pass
+
+    if not p_values:
+        # Synthesise — same generator the M3 module uses for tests +
+        # training. Tenant-stable seed via a deterministic hash.
+        try:
+            from clarion.modules.no_show_prediction import generate_dataset
+        except ImportError:  # pragma: no cover — module is core
+            return [], 0, 0.0
+        seed = abs(hash(customer_id)) % 2**31
+        dataset = generate_dataset(seed=seed, n=400)
+        # raw_rows[i]["prior_no_show_rate"] is in [0, 1] from the
+        # generator — use that as the proxy for p_no_show.
+        for row in dataset.raw_rows:
+            p = float(row.get("prior_no_show_rate", 0.0))
+            p_values.append(p)
+            if p < 0.25:
+                counts["low"] += 1
+            elif p < 0.50:
+                counts["medium"] += 1
+            else:
+                counts["high"] += 1
+
+    total = len(p_values)
+    if total == 0:
+        return [], 0, 0.0
+
+    buckets = [
+        NoShowRiskBucket(
+            band="low",  # type: ignore[arg-type]
+            count=counts["low"],
+            fraction=counts["low"] / total,
+        ),
+        NoShowRiskBucket(
+            band="medium",  # type: ignore[arg-type]
+            count=counts["medium"],
+            fraction=counts["medium"] / total,
+        ),
+        NoShowRiskBucket(
+            band="high",  # type: ignore[arg-type]
+            count=counts["high"],
+            fraction=counts["high"] / total,
+        ),
+    ]
+    return buckets, total, statistics.fmean(p_values)
+
+
+def _read_pms_tasks(customer_id: str, base: Path) -> list[PmsTaskRow]:
+    """Walk M1's PMS writeback directory and roll task.json files
+    into typed rows. Returns [] when the directory doesn't exist."""
+    tasks_dir = base / customer_id / "pms_writeback"
+    if not tasks_dir.is_dir():
+        return []
+
+    rows: list[PmsTaskRow] = []
+    for conv_dir in tasks_dir.iterdir():
+        if not conv_dir.is_dir():
+            continue
+        task_path = conv_dir / "task.json"
+        if not task_path.is_file():
+            continue
+        try:
+            payload = json.loads(task_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        priority = payload.get("priority")
+        if priority not in {"normal", "urgent"}:
+            priority = "normal"
+        rows.append(
+            PmsTaskRow(
+                task_id=str(payload.get("task_id", "—")),
+                subject=str(payload.get("subject", "(no subject)")),
+                priority=priority,  # type: ignore[arg-type]
+                assignee_group=str(payload.get("assignee_group", "front_desk")),
+                patient_id=(
+                    str(payload["patient_id"])
+                    if payload.get("patient_id") is not None
+                    else None
+                ),
+                created_at=str(payload.get("generated_at", ""))[:10] or "—",
+            )
+        )
+
+    # Urgent first, then by task_id for a stable display.
+    rows.sort(key=lambda r: (0 if r.priority == "urgent" else 1, r.task_id))
+    return rows
+
+
+def _read_eligibility(
+    customer_id: str, base: Path
+) -> tuple[list[EligibilitySummary], int]:
+    """Bucket eligibility records by status from SQLite."""
+    sqlite_path = base / customer_id / "structured.sqlite3"
+    if not sqlite_path.is_file():
+        return [], 0
+
+    import sqlite3
+
+    counts: dict[str, int] = {}
+    try:
+        with sqlite3.connect(sqlite_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            rows = cur.execute(
+                "SELECT status, COUNT(*) AS n FROM eligibility GROUP BY status"
+            ).fetchall()
+            for r in rows:
+                counts[str(r["status"]) or "unknown"] = int(r["n"])
+    except sqlite3.DatabaseError as exc:
+        log.warning("eligibility: sqlite error for %r: %s", customer_id, exc)
+        return [], 0
+
+    total = sum(counts.values())
+    if total == 0:
+        return [], 0
+
+    # Preserve a canonical order so colours don't flip between
+    # tenants.
+    order = ("active", "pending", "denied", "unknown")
+    summaries: list[EligibilitySummary] = []
+    for status in order:
+        if status in counts:
+            summaries.append(
+                EligibilitySummary(
+                    status=status,
+                    count=counts[status],
+                    fraction=counts[status] / total,
+                )
+            )
+    # Tail — any statuses we didn't anticipate (e.g. "terminated").
+    extras = sorted(k for k in counts if k not in order)
+    for status in extras:
+        summaries.append(
+            EligibilitySummary(
+                status=status,
+                count=counts[status],
+                fraction=counts[status] / total,
+            )
+        )
+    return summaries, total
 
 
 # ---------- Voice Intelligence ----------
@@ -1486,6 +1901,7 @@ __all__ = [
     "AgentFlowSnapshot",
     "AuditTailItem",
     "CostBreakdown",
+    "EligibilitySummary",
     "EmergencyItem",
     "EmotionTotal",
     "EscalationItem",
@@ -1495,8 +1911,12 @@ __all__ = [
     "GlobalCostSLO",
     "GlobalKPIs",
     "HealthStatus",
+    "HealthcareOpsSnapshot",
     "JudgeAgreement",
     "LatencyBreakdown",
+    "NoShowRiskBucket",
+    "PmsTaskRow",
+    "ProviderUtilization",
     "SentinelOpsSnapshot",
     "SignalContribution",
     "TenantSnapshot",
@@ -1506,6 +1926,7 @@ __all__ = [
     "build_agent_flow",
     "build_cost_slo",
     "build_global_kpis",
+    "build_healthcare_ops",
     "build_sentinel_ops",
     "build_tenant_snapshot",
     "build_voice_intelligence",
