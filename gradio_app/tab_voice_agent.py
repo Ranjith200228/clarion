@@ -62,10 +62,15 @@ _DEMO_BUBBLE_TEXT = (
 
 _HEADER_TEXT = (
     "## Voice Agent\n"
-    "Speak to Clarion. The browser records, OpenAI Whisper transcribes, "
-    "the agent answers, and OpenAI TTS reads the reply back. Per-stage "
-    "latency surfaces below each turn.\n"
+    "Speak to Clarion. Tap **record**, talk, then tap **stop** - the "
+    "turn auto-submits, the reply plays back, and the mic clears so "
+    "you can immediately record the next turn. Per-stage latency "
+    "surfaces below each turn.\n"
 )
+
+# A "tap" recording shorter than this is treated as accidental and
+# dropped silently rather than firing a noisy turn at the backend.
+_MIN_RECORDING_SECONDS = 0.6
 
 
 @dataclass
@@ -102,7 +107,8 @@ def build(client: VoiceClient | None = None) -> VoiceAgentTab:
     gr.Markdown(_HEADER_TEXT)
     state = gr.State(value=VoiceAgentState())
     metrics_md = gr.Markdown(
-        "_Press record below, speak a request, then stop to submit._"
+        "_Tap record, talk, tap stop - the turn submits and the reply "
+        "plays back automatically._"
     )
 
     with gr.Row():
@@ -125,14 +131,27 @@ def build(client: VoiceClient | None = None) -> VoiceAgentTab:
         "_Transcript + assistant reply will appear here after each turn._"
     )
 
-    # Submit button is explicit so the user can re-record before
-    # sending — the auto-submit on stop pattern fires too eagerly
-    # on quiet rooms.
-    submit_btn = gr.Button("Send voice turn", variant="primary")
-    submit_btn.click(
-        fn=_handle_turn(api),
+    # Continuous-conversation UX: auto-submit when the user taps
+    # stop on the recorder. A short-recording guard inside the
+    # handler drops accidental sub-`_MIN_RECORDING_SECONDS`-second
+    # taps before they hit the backend. After every turn the
+    # handler returns ``None`` for the mic component so the
+    # previous recording clears and the user can tap record again
+    # without a manual reset.
+    handler = _handle_turn(api)
+    mic_input.stop_recording(
+        fn=handler,
         inputs=[mic_input, state],
-        outputs=[audio_output, transcript_md, state],
+        outputs=[audio_output, transcript_md, state, mic_input],
+    )
+    # Keep an explicit "Resend last" button as a safety net for
+    # when stop_recording doesn't fire (e.g. broken mic, browser
+    # quirk) - same handler, same outputs.
+    submit_btn = gr.Button("Resend last recording", variant="secondary")
+    submit_btn.click(
+        fn=handler,
+        inputs=[mic_input, state],
+        outputs=[audio_output, transcript_md, state, mic_input],
     )
 
     return VoiceAgentTab(
@@ -148,19 +167,43 @@ def build(client: VoiceClient | None = None) -> VoiceAgentTab:
 
 
 def _handle_turn(api: VoiceClient):  # type: ignore[no-untyped-def]
-    """Closure that captures the VoiceClient for the Gradio callback."""
+    """Closure that captures the VoiceClient for the Gradio callback.
+
+    Returns a 4-tuple ``(reply_audio_path, transcript_md, state,
+    mic_clear)``. The last element is always ``None`` on a successful
+    turn so the mic_input component clears - this is what makes the
+    "tap record again, immediately ready" loop feel continuous.
+    """
 
     def _on_submit(
         audio: tuple[int, np.ndarray] | None,
         state: VoiceAgentState,
-    ) -> tuple[str | None, str, VoiceAgentState]:
+    ) -> tuple[str | None, str, VoiceAgentState, None]:
         if audio is None:
             return (
                 None,
-                "**No audio recorded yet** — press record, speak, then send.",
+                "_Waiting for your next recording..._",
                 state,
+                None,
             )
         sample_rate, samples = audio
+
+        # Short-recording guard: filter out accidental taps before
+        # they hit the backend. Whisper would happily transcribe
+        # a 200 ms blip into garbage tokens which then derails the
+        # agent loop.
+        if samples.size == 0 or sample_rate <= 0:
+            return None, "_Waiting for your next recording..._", state, None
+        duration_s = samples.shape[0] / float(sample_rate)
+        if duration_s < _MIN_RECORDING_SECONDS:
+            return (
+                None,
+                f"_Recording was {duration_s:.1f}s - hold and speak for at "
+                f"least {_MIN_RECORDING_SECONDS:.1f}s._",
+                state,
+                None,
+            )
+
         wav_bytes = _numpy_to_wav_bytes(samples, sample_rate)
 
         # Allocate a session id on the first turn; reuse it from then on.
@@ -178,23 +221,26 @@ def _handle_turn(api: VoiceClient):  # type: ignore[no-untyped-def]
         except ApiError as e:
             msg = str(e)
             if "503" in msg and "voice_not_configured" in msg:
-                # The polished demo-mode bubble — recruiters arriving
+                # The polished demo-mode bubble - recruiters arriving
                 # without an OPENAI_API_KEY should see what the tab
                 # would do, not a stack trace.
-                return None, _DEMO_BUBBLE_TEXT, state
-            return None, f"**Voice backend error**: {msg}", state
+                return None, _DEMO_BUBBLE_TEXT, state, None
+            return None, f"**Voice backend error**: {msg}", state, None
 
         out_audio_path = _write_temp_audio(result.audio_bytes, result.audio_format)
         markdown = (
             f"**You said:** {result.transcript or '_(empty transcript)_'}\n\n"
             f"**Clarion:** {result.assistant_text or '_(empty reply)_'}\n\n"
             f"---\n"
-            f"_Latency_ — STT: {result.latency_ms_stt} ms · "
+            f"_Latency_ - STT: {result.latency_ms_stt} ms · "
             f"Agent: {result.latency_ms_agent} ms · "
             f"TTS: {result.latency_ms_tts} ms · "
-            f"_session: `{state.session_id}`_"
+            f"_session: `{state.session_id}`_\n\n"
+            "_Tap the mic again whenever you're ready for the next turn._"
         )
-        return out_audio_path, markdown, state
+        # Returning None for the mic component clears it so the
+        # next record-tap starts from a blank slate.
+        return out_audio_path, markdown, state, None
 
     return _on_submit
 
