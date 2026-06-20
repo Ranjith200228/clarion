@@ -669,3 +669,25 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
 }
+
+
+/* ============================================================
+ * Phase H3 - per-panel polish
+ *
+ * Inline sparkline on each KPI tile sits below the delta row
+ * and stretches to the tile width. It's purely decorative for
+ * legibility, so it's full-width and short.
+ * ============================================================ */
+.clarion-kpi-spark {
+    display: block;
+    margin-top: var(--sp-2);
+    opacity: 0.9;
+}
+.clarion-kpi-tile {
+    /* Give the tile a touch more breathing room now that it
+     * carries a sparkline. */
+    min-height: 110px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}

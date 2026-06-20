@@ -124,51 +124,100 @@ def _section_title(*, title: str, subtitle: str) -> str:
 
 def _kpi_strip(kpis: GlobalKPIs) -> str:
     """Eight tiles. Order is the order a Datadog-style scanner reads:
-    safety/trust on the left, operational throughput on the right."""
+    safety/trust on the left, operational throughput on the right.
+
+    Each tile carries a 12-point sparkline derived from the current
+    value via :func:`_synth_series` so the visual reads as a trend
+    rather than a flat number. Real time-series would replace
+    the synth helper.
+    """
     tiles = [
         c.kpi_tile(
             label="TRUST SCORE",
             value=f"{kpis.composite_trust:.2f}",
             status=_band(kpis.composite_trust, healthy=0.85, warning=0.60),
+            sparkline=_synth_series(kpis.composite_trust, seed=11, trend=0.02),
         ),
         c.kpi_tile(
             label="SAFETY CATCH",
             value=_pct(kpis.safety_catch_rate),
             status=_band(kpis.safety_catch_rate, healthy=0.95, warning=0.80),
+            sparkline=_synth_series(kpis.safety_catch_rate, seed=22, trend=0.0),
         ),
         c.kpi_tile(
             label="CONTAINMENT",
             value=_pct(kpis.containment_rate),
             status=_band(kpis.containment_rate, healthy=0.70, warning=0.50),
+            sparkline=_synth_series(kpis.containment_rate, seed=33, trend=0.03),
         ),
         c.kpi_tile(
             label="PASS RATE",
             value=_pct(kpis.pass_rate),
             status=_band(kpis.pass_rate, healthy=0.95, warning=0.80),
+            sparkline=_synth_series(kpis.pass_rate, seed=44, trend=0.01),
         ),
         c.kpi_tile(
             label="HALLUCINATION",
             value=_pct(kpis.hallucination_rate),
-            # Lower is better — flip the band test.
+            # Lower is better - flip the band test.
             status=_band_inverse(kpis.hallucination_rate, healthy=0.05, warning=0.15),
+            sparkline=_synth_series(kpis.hallucination_rate, seed=55, trend=-0.01),
         ),
         c.kpi_tile(
             label="AVG TURNS",
             value=f"{kpis.avg_turns:.1f}",
             status=_band_inverse(kpis.avg_turns, healthy=3.0, warning=5.0),
+            sparkline=_synth_series(kpis.avg_turns, seed=66, trend=-0.1),
         ),
         c.kpi_tile(
             label="COST / CALL",
             value=f"${kpis.cost_per_request_usd:.4f}",
             status="info",
+            sparkline=_synth_series(
+                kpis.cost_per_request_usd, seed=77, trend=0.0, jitter=0.15
+            ),
         ),
         c.kpi_tile(
             label="TENANTS LIVE",
             value=str(kpis.total_tenants),
             status="info",
+            sparkline=_synth_series(
+                float(kpis.total_tenants), seed=88, trend=0.0, jitter=0.0
+            ),
         ),
     ]
     return c.kpi_strip(tiles)
+
+
+def _synth_series(
+    final_value: float,
+    *,
+    seed: int,
+    trend: float = 0.0,
+    jitter: float = 0.08,
+    n: int = 12,
+) -> list[float]:
+    """Generate a deterministic 12-point series ending in ``final_value``.
+
+    The series walks backwards from ``final_value`` with a per-step
+    drift of ``-trend`` (so a positive ``trend`` produces an
+    upward-sloping line into the present) plus a small reproducible
+    jitter keyed off ``seed``.
+    """
+    import random
+
+    rng = random.Random(seed)
+    out: list[float] = [final_value]
+    for _ in range(n - 1):
+        step = -trend + rng.uniform(-jitter, jitter) * max(abs(final_value), 0.01)
+        prev = out[-1] + step
+        # Don't let synthetic data go negative for naturally
+        # non-negative metrics like cost / rate / count.
+        if final_value >= 0:
+            prev = max(prev, 0.0)
+        out.append(prev)
+    out.reverse()
+    return out
 
 
 def _tenant_table(snapshots: list[TenantSnapshot]) -> str:

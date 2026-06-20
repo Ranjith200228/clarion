@@ -48,17 +48,22 @@ def kpi_tile(
     delta: str | None = None,
     trend: Trend = "flat",
     status: Status = "info",
+    sparkline: list[float] | None = None,
 ) -> str:
     """Render one KPI tile for the Mission Control top strip.
 
     Args:
-        label:   short uppercase label ("CONTAINMENT").
-        value:   primary number ("74.0%"). Already formatted —
-                 callers pick the precision + unit.
-        delta:   optional change vs. previous period ("+2.1%").
-                 None hides the delta row.
-        trend:   "up" / "down" / "flat" — sets the delta color.
-        status:  border-left color: healthy/warning/critical/info/unknown.
+        label:      short uppercase label ("CONTAINMENT").
+        value:      primary number ("74.0%"). Already formatted -
+                    callers pick the precision + unit.
+        delta:      optional change vs. previous period ("+2.1%").
+                    None hides the delta row.
+        trend:      "up" / "down" / "flat" - sets the delta color.
+        status:     border-left color: healthy/warning/critical/info.
+        sparkline:  optional list of recent values for an inline
+                    SVG sparkline. Auto-scaled to the tile width;
+                    values are unitless. Empty / single-element
+                    lists are dropped silently.
 
     Returns a self-contained ``<div class="clarion-kpi-tile">`` HTML
     string. No script, no inline style overrides.
@@ -70,12 +75,63 @@ def kpi_tile(
             f"{_esc(delta)}"
             "</div>"
         )
+    spark_html = ""
+    if sparkline is not None and len(sparkline) >= 2:
+        spark_html = _spark_svg(sparkline, trend=trend, status=status)
     return (
         f'<div class="clarion-kpi-tile" data-status="{status}">'
         f'<div class="clarion-kpi-label">{_esc(label)}</div>'
         f'<div class="clarion-kpi-value">{_esc(value)}</div>'
         f"{delta_html}"
+        f"{spark_html}"
         "</div>"
+    )
+
+
+def _spark_svg(values: list[float], *, trend: Trend, status: Status) -> str:
+    """Render a fixed-size sparkline polyline as inline SVG.
+
+    Auto-scales the y-axis to the value range; a flat series
+    renders as a horizontal middle-line. Stroke colour follows
+    the tile's status / trend so the spark line ties visually
+    to the value above it.
+    """
+    width = 120
+    height = 28
+    pad = 2
+    lo = min(values)
+    hi = max(values)
+    span = hi - lo if hi > lo else 1.0
+    n = len(values)
+    pts: list[str] = []
+    for i, v in enumerate(values):
+        x = pad + (width - 2 * pad) * (i / (n - 1))
+        # SVG y grows downward; invert.
+        y = pad + (height - 2 * pad) * (1.0 - (v - lo) / span)
+        pts.append(f"{x:.1f},{y:.1f}")
+    points = " ".join(pts)
+    color = (
+        "var(--c-critical)"
+        if status == "critical"
+        else "var(--c-warning)"
+        if status == "warning"
+        else "var(--c-healthy)"
+        if (status == "healthy" or trend == "up")
+        else "var(--c-text-muted)"
+        if trend == "down"
+        else "var(--c-accent)"
+    )
+    return (
+        f'<svg class="clarion-kpi-spark" '
+        f'width="100%" height="{height}" '
+        f'viewBox="0 0 {width} {height}" '
+        f'xmlns="http://www.w3.org/2000/svg" '
+        f'preserveAspectRatio="none" aria-hidden="true">'
+        f'<polyline points="{points}" '
+        f'fill="none" stroke="{color}" stroke-width="1.5" '
+        f'stroke-linecap="round" stroke-linejoin="round" '
+        f'opacity="0.85"/>'
+        "</svg>"
     )
 
 
