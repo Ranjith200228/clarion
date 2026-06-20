@@ -36,9 +36,10 @@ def build_html(rollup: GlobalCostSLO) -> str:
         )
         + _kpi_strip(rollup)
         + '<div class="clarion-row" style="align-items: stretch; gap: 16px;">'
+        + _cost_share_panel(rollup)
         + _cost_panel(rollup.per_tenant_cost)
-        + _latency_panel(rollup.per_tenant_latency)
         + "</div>"
+        + _latency_panel(rollup.per_tenant_latency)
         + "</div>"
     )
 
@@ -101,6 +102,38 @@ def _kpi_strip(rollup: GlobalCostSLO) -> str:
         ),
     ]
     return c.kpi_strip(tiles)
+
+
+_DONUT_PALETTE = (
+    "#06B6D4",  # cyan-500
+    "#A78BFA",  # violet-400
+    "#F59E0B",  # amber-500
+    "#10B981",  # emerald-500
+    "#F472B6",  # pink-400
+    "#22D3EE",  # cyan-400
+    "#FB7185",  # rose-400
+    "#34D399",  # emerald-400
+)
+
+
+def _cost_share_panel(rollup: GlobalCostSLO) -> str:
+    """Donut: per-tenant share of total cost.
+
+    Sits to the left of the per-tenant cost cards as a visual
+    summary - readers should grasp who drives the bill in one
+    glance before scanning the detail rows.
+    """
+    segments: list[tuple[str, float, str]] = [
+        (row.tenant, row.total_cost_usd, _DONUT_PALETTE[i % len(_DONUT_PALETTE)])
+        for i, row in enumerate(rollup.per_tenant_cost)
+    ]
+    donut = c.donut_chart(
+        segments=segments,
+        center_value=f"${rollup.total_cost_usd:.2f}",
+        center_label="Total",
+        size=200,
+    )
+    return c.panel(title="Cost Share by Tenant", body_html=donut)
 
 
 def _cost_panel(rows: list[CostBreakdown]) -> str:

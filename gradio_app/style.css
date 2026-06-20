@@ -691,3 +691,49 @@
     flex-direction: column;
     justify-content: space-between;
 }
+
+/* Phase H4 - donut chart layout */
+.clarion-donut {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sp-3);
+}
+.clarion-donut svg {
+    flex-shrink: 0;
+}
+.clarion-donut-empty {
+    font-size: var(--fs-xs);
+    color: var(--c-text-muted);
+}
+.clarion-donut-legend {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+    width: 100%;
+    max-width: 220px;
+}
+.clarion-donut-legend-row {
+    display: grid;
+    grid-template-columns: 12px 1fr auto;
+    column-gap: 8px;
+    align-items: center;
+    font-size: var(--fs-xs);
+    color: var(--c-text);
+}
+.clarion-donut-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+}
+.clarion-donut-legend-label {
+    color: var(--c-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.clarion-donut-legend-value {
+    font-family: var(--font-mono);
+    color: var(--c-text-muted);
+    font-size: 11px;
+}

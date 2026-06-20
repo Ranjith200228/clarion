@@ -205,32 +205,199 @@ def trust_gauge(
     th_rad = math.radians(th_deg)
     th_x = cx + r * math.cos(th_rad)
 
+    # Five tick marks at 0%, 25%, 50%, 75%, 100% around the arc.
+    # Each is a short radial line drawn slightly outside the track.
+    ticks: list[str] = []
+    for t in (0.0, 0.25, 0.5, 0.75, 1.0):
+        t_deg = 180.0 - 180.0 * t
+        t_rad = math.radians(t_deg)
+        inner = r + 9
+        outer = r + 16
+        x1 = cx + inner * math.cos(t_rad)
+        y1 = cy - inner * math.sin(t_rad)
+        x2 = cx + outer * math.cos(t_rad)
+        y2 = cy - outer * math.sin(t_rad)
+        ticks.append(
+            f'<line x1="{x1:.2f}" y1="{y1:.2f}" '
+            f'x2="{x2:.2f}" y2="{y2:.2f}" '
+            f'stroke="{PALETTE["text_muted"]}" stroke-width="1.5" '
+            'stroke-linecap="round" opacity="0.5"/>'
+        )
+    tick_marks = "".join(ticks)
+
+    # Use a unique gradient ID per render to avoid SVG ID collisions
+    # if multiple gauges sit on the same page.
+    grad_id = f"clarion-gauge-grad-{int(score * 1000):04d}"
+
     svg = (
-        '<svg viewBox="0 0 180 110" width="180" height="110" '
+        '<svg viewBox="0 0 180 120" width="180" height="120" '
         'xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+        "<defs>"
+        f'<linearGradient id="{grad_id}" x1="0%" y1="0%" x2="100%" y2="0%">'
+        f'<stop offset="0%" stop-color="{fill}" stop-opacity="0.65"/>'
+        f'<stop offset="100%" stop-color="{fill}" stop-opacity="1.0"/>'
+        "</linearGradient>"
+        "</defs>"
+        # Tick marks (drawn first so they sit under the arc visually).
+        + tick_marks
         # Track (full semicircle).
-        f'<path d="M {track_start_x} {track_start_y} '
+        + f'<path d="M {track_start_x} {track_start_y} '
         f"A {r} {r} 0 0 1 {track_end_x} {track_end_y}\" "
         f'fill="none" stroke="{PALETTE["bg_subtle"]}" stroke-width="14" '
         'stroke-linecap="round"/>'
-        # Fill (partial arc, score-driven).
+        # Fill (partial arc, score-driven, gradient-stroked).
         f'<path d="M {track_start_x} {track_start_y} '
         f"A {r} {r} 0 0 1 {end_x:.2f} {end_y:.2f}\" "
-        f'fill="none" stroke="{fill}" stroke-width="14" '
+        f'fill="none" stroke="url(#{grad_id})" stroke-width="14" '
         'stroke-linecap="round"/>'
         # Threshold hairline.
         f'<line x1="{th_x:.2f}" y1="{cy - r - 4}" x2="{th_x:.2f}" '
         f'y2="{cy - r + 18}" stroke="{PALETTE["text_muted"]}" '
         'stroke-width="2" stroke-dasharray="3 3"/>'
+        # Centered score - large numeric inside the arc.
+        f'<text x="{cx}" y="{cy - 6}" text-anchor="middle" '
+        f'fill="{PALETTE["text_strong"]}" font-size="26" '
+        f'font-weight="700" font-family="ui-sans-serif, system-ui, sans-serif">'
+        f"{score:.2f}"
+        "</text>"
+        # Subtitle below the score.
+        f'<text x="{cx}" y="{cy + 10}" text-anchor="middle" '
+        f'fill="{PALETTE["text_muted"]}" font-size="9" '
+        'font-family="ui-monospace, monospace" letter-spacing="0.12em">'
+        f"THRESHOLD {int(threshold * 100)}"
+        "</text>"
         "</svg>"
     )
     return (
         '<div class="clarion-gauge">'
         f'<div class="clarion-gauge-label">{_esc(label)}</div>'
         f"{svg}"
-        f'<div class="clarion-gauge-value">{score:.2f}</div>'
         "</div>"
     )
+
+
+# ---------- Donut chart (SVG) ----------
+
+
+def donut_chart(
+    *,
+    segments: list[tuple[str, float, str]],
+    center_value: str = "",
+    center_label: str = "",
+    size: int = 180,
+) -> str:
+    """Inline-SVG donut chart for share/composition visuals.
+
+    Args:
+        segments: list of ``(label, value, color)``. Values are
+                  summed and each segment's arc spans the
+                  proportional sweep. Negative values are clamped
+                  to zero. A list summing to zero falls back to
+                  the empty placeholder.
+        center_value: optional big string in the donut hole
+                      (typically the total).
+        center_label: optional small caption under the center value.
+        size: SVG side in pixels; the donut is sized to fit.
+
+    The legend is rendered as a sibling list below the SVG -
+    one row per segment with the colour dot, label, and value.
+    """
+    total = sum(max(0.0, v) for _, v, _ in segments)
+    cx = cy = size / 2
+    radius = size * 0.42
+    stroke = size * 0.12  # donut ring width
+
+    if total <= 0:
+        return (
+            f'<div class="clarion-donut" style="width: {size}px;">'
+            f'<svg width="{size}" height="{size}" '
+            f'viewBox="0 0 {size} {size}" '
+            'xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+            f'<circle cx="{cx}" cy="{cy}" r="{radius:.2f}" '
+            'fill="none" stroke="var(--c-bg-subtle)" '
+            f'stroke-width="{stroke:.2f}"/>'
+            "</svg>"
+            '<div class="clarion-donut-empty">No data</div>'
+            "</div>"
+        )
+
+    # Build each arc segment. Each is a circle stroke-dasharray
+    # trick: we draw a full circle but use stroke-dashoffset to
+    # rotate it into position and stroke-dasharray to size it.
+    circ = 2 * math.pi * radius
+    offset = 0.0
+    arcs: list[str] = []
+    for _label, value, color in segments:
+        v = max(0.0, value)
+        if v == 0:
+            continue
+        arc_len = (v / total) * circ
+        gap = circ - arc_len
+        # The dasharray "arc_len gap" plus dashoffset rotates the
+        # segment into place. Negative dashoffset moves clockwise.
+        arcs.append(
+            f'<circle cx="{cx}" cy="{cy}" r="{radius:.2f}" '
+            f'fill="none" stroke="{color}" '
+            f'stroke-width="{stroke:.2f}" '
+            f'stroke-dasharray="{arc_len:.2f} {gap:.2f}" '
+            f'stroke-dashoffset="{-offset:.2f}" '
+            'transform="rotate(-90 ' + f"{cx} {cy})\"/>"
+        )
+        offset += arc_len
+
+    center_html = ""
+    if center_value or center_label:
+        center_html = (
+            # SVG <text> nodes inside the donut hole.
+            f'<text x="{cx}" y="{cy - 2}" text-anchor="middle" '
+            'fill="var(--c-text-strong)" font-size="20" '
+            'font-weight="700" '
+            'font-family="ui-sans-serif, system-ui, sans-serif">'
+            f"{_esc(center_value)}"
+            "</text>"
+            f'<text x="{cx}" y="{cy + 14}" text-anchor="middle" '
+            'fill="var(--c-text-muted)" font-size="9" '
+            'font-family="ui-monospace, monospace" '
+            'letter-spacing="0.1em">'
+            f"{_esc(center_label.upper())}"
+            "</text>"
+        )
+
+    legend_rows = "".join(
+        '<div class="clarion-donut-legend-row">'
+        f'<span class="clarion-donut-swatch" style="background:{color};"></span>'
+        f'<span class="clarion-donut-legend-label">{_esc(label)}</span>'
+        f'<span class="clarion-donut-legend-value">'
+        f"{_fmt_share(value, total)}</span>"
+        "</div>"
+        for label, value, color in segments
+        if value > 0
+    )
+
+    return (
+        f'<div class="clarion-donut" style="width: {size}px;">'
+        f'<svg width="{size}" height="{size}" '
+        f'viewBox="0 0 {size} {size}" '
+        'xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+        # Track ring (full grey circle behind the segments).
+        f'<circle cx="{cx}" cy="{cy}" r="{radius:.2f}" '
+        'fill="none" stroke="var(--c-bg-subtle)" '
+        f'stroke-width="{stroke:.2f}"/>'
+        + "".join(arcs)
+        + center_html
+        + "</svg>"
+        + '<div class="clarion-donut-legend">'
+        + legend_rows
+        + "</div>"
+        "</div>"
+    )
+
+
+def _fmt_share(value: float, total: float) -> str:
+    if total <= 0:
+        return "—"
+    pct = (value / total) * 100.0
+    return f"{pct:.1f}%"
 
 
 # ---------- Signal bar ----------
@@ -515,6 +682,7 @@ __all__ = [
     "agent_node",
     "brand_strip",
     "cost_chip",
+    "donut_chart",
     "incident_row",
     "kpi_strip",
     "kpi_tile",
