@@ -49,6 +49,7 @@ from gradio_app.views import (
     cost_slo,
     healthcare_ops,
     mission_control,
+    patient_360,
     sentinel_ops,
     voice_intel,
 )
@@ -122,6 +123,9 @@ def build_app() -> gr.Blocks:
             # risk, eligibility, PMS queue.
             with gr.Tab("Healthcare Ops"):
                 ho_html = gr.HTML(_render_healthcare_ops(default_customer))
+            # v2 patient-centric view — per-patient longitudinal record.
+            with gr.Tab("Patient 360"):
+                p360_html = gr.HTML(_render_patient_360(default_customer))
             # v1 interactive surfaces — the only callable agents.
             # Kept because they cannot be replaced by a read-only
             # view: the user types or speaks into them.
@@ -156,9 +160,10 @@ def build_app() -> gr.Blocks:
             af = _render_agent_flow(customer_id)
             vi = _render_voice_intel(customer_id)
             ho = _render_healthcare_ops(customer_id)
+            p360 = _render_patient_360(customer_id)
             cs = _render_cost_slo()
             new_live_state = tab_live_agent.set_customer(live_state, customer_id)
-            return (mc, so, af, vi, ho, new_live_state, new_voice_state, cs)
+            return (mc, so, af, vi, ho, p360, new_live_state, new_voice_state, cs)
 
         outputs = [
             mc_html,
@@ -166,6 +171,7 @@ def build_app() -> gr.Blocks:
             af_html,
             vi_html,
             ho_html,
+            p360_html,
             live.state,
             voice.state,
             cs_html,
@@ -251,6 +257,18 @@ def _render_healthcare_ops(customer_id: str) -> str:
     """
     ops = data_sources.build_healthcare_ops(customer_id)
     return healthcare_ops.build_html(ops)
+
+
+def _render_patient_360(customer_id: str) -> str:
+    """Build the Patient 360 HTML for one customer.
+
+    Per-tenant; renders a small synthetic patient roster + the
+    first patient's profile/timeline/care-team/insurance. A future
+    task can extend `data_sources.build_patient_360` to read from
+    a real per-tenant patient store.
+    """
+    snap = data_sources.build_patient_360(customer_id)
+    return patient_360.build_html(snap)
 
 
 def _render_cost_slo() -> str:

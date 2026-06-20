@@ -32,7 +32,7 @@ import logging
 import re
 import statistics
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
@@ -1897,6 +1897,396 @@ def _relative_time(ts: datetime | None) -> str:
     return f"{secs // 86400}d ago"
 
 
+# ============================================================
+# Patient 360 — per-patient longitudinal record
+# ============================================================
+#
+# A read-only roll-up of one synthetic patient's interactions
+# with Clarion: their profile, the timeline of touchpoints
+# (voice calls, appointments, eligibility checks, escalations),
+# their care team, and their insurance state. Purely synthetic
+# data; no PHI; no SQLite persistence yet (a future task can
+# wire this to the same store that backs HealthcareOps).
+
+
+@dataclass(frozen=True)
+class PatientTimelineEvent:
+    """One event in a patient's care timeline.
+
+    `kind` drives the icon + color on the rendered row.
+    `severity` is one of healthy / info / warning / critical so the
+    row can be tinted. `ts` is timezone-aware UTC.
+    """
+
+    ts: datetime
+    kind: Literal[
+        "voice_call", "appointment", "eligibility", "escalation", "pms_task", "note"
+    ]
+    title: str
+    detail: str
+    severity: Literal["healthy", "info", "warning", "critical"] = "info"
+
+
+@dataclass(frozen=True)
+class PatientCareTeamMember:
+    name: str
+    role: str
+    is_primary: bool = False
+
+
+@dataclass(frozen=True)
+class PatientInsurance:
+    payer: str
+    member_id: str
+    plan: str
+    eligibility_status: Literal["active", "pending", "lapsed", "unknown"]
+    last_verified_at: datetime | None
+
+
+@dataclass(frozen=True)
+class PatientProfile:
+    """One patient's longitudinal record."""
+
+    patient_id: str
+    display_name: str
+    dob_display: str
+    age_years: int
+    phone_display: str
+    email: str
+    address: str
+    preferred_language: str
+    customer_id: str
+
+    # Engagement + sentiment scoring (Bayesian-smoothed beta-binomial
+    # over their interaction history; values in [0, 1]).
+    engagement_score: float
+    sentiment_score: float
+    trust_score: float
+
+    care_team: tuple[PatientCareTeamMember, ...]
+    insurance: PatientInsurance | None
+    timeline: tuple[PatientTimelineEvent, ...]
+
+
+@dataclass(frozen=True)
+class Patient360Snapshot:
+    """The full Patient 360 view payload — patients in this tenant
+    plus the currently-selected patient's profile.
+
+    Empty `patients` triggers the view's empty state.
+    """
+
+    schema_version: str
+    customer_id: str
+    patients: tuple[PatientProfile, ...]
+    selected: PatientProfile | None
+
+
+_PATIENT_360_SCHEMA_VERSION = "1.0.0"
+
+
+def _synthetic_patient_360(
+    customer_id: str,
+) -> tuple[PatientProfile, ...]:
+    """Generate a small deterministic synthetic patient roster
+    per tenant. Two patients each, with different journey shapes.
+
+    No PHI; no live data. Useful for empty-data demos so the view
+    renders something meaningful without needing a runner pass.
+    """
+    now = datetime.now(UTC)
+
+    def event(
+        hours_ago: int,
+        kind: Literal[
+            "voice_call",
+            "appointment",
+            "eligibility",
+            "escalation",
+            "pms_task",
+            "note",
+        ],
+        title: str,
+        detail: str,
+        severity: Literal["healthy", "info", "warning", "critical"] = "info",
+    ) -> PatientTimelineEvent:
+        return PatientTimelineEvent(
+            ts=now - timedelta(hours=hours_ago),
+            kind=kind,
+            title=title,
+            detail=detail,
+            severity=severity,
+        )
+
+    if customer_id == "orthopedics":
+        roster = (
+            PatientProfile(
+                patient_id="pt_ortho_1024",
+                display_name="Dana Whitfield",
+                dob_display="1972-04-18",
+                age_years=53,
+                phone_display="(415) 555-2104",
+                email="dana.w@example.invalid",
+                address="900 Folsom St, San Francisco, CA 94107",
+                preferred_language="en",
+                customer_id=customer_id,
+                engagement_score=0.71,
+                sentiment_score=0.58,
+                trust_score=0.93,
+                care_team=(
+                    PatientCareTeamMember(
+                        "Dr. Priya Anand", "Orthopedic Surgeon", is_primary=True
+                    ),
+                    PatientCareTeamMember("Marcus Reed, NP", "Care Navigator"),
+                    PatientCareTeamMember("Helen Vargas", "Patient Liaison"),
+                ),
+                insurance=PatientInsurance(
+                    payer="Anthem Blue",
+                    member_id="ABX-441-208",
+                    plan="PPO Gold",
+                    eligibility_status="active",
+                    last_verified_at=now - timedelta(days=6),
+                ),
+                timeline=(
+                    event(
+                        4,
+                        "voice_call",
+                        "Voice intake — post-op pain follow-up",
+                        "Caller reported pain 4/10, slight swelling. Routed to NP.",
+                        "info",
+                    ),
+                    event(
+                        29,
+                        "appointment",
+                        "Appointment scheduled",
+                        "Knee arthroscopy follow-up booked with Dr. Anand.",
+                        "healthy",
+                    ),
+                    event(
+                        48,
+                        "eligibility",
+                        "Eligibility re-verified",
+                        "Anthem PPO Gold active; co-pay $35 collected at intake.",
+                        "healthy",
+                    ),
+                    event(
+                        76,
+                        "pms_task",
+                        "PMS task: schedule physical therapy",
+                        "Routed to ortho-ops queue; assignee Marcus Reed, NP.",
+                        "info",
+                    ),
+                    event(
+                        144,
+                        "escalation",
+                        "Sentinel escalation",
+                        "Low confidence on insurance plan match; human resolved.",
+                        "warning",
+                    ),
+                ),
+            ),
+            PatientProfile(
+                patient_id="pt_ortho_1031",
+                display_name="Theo Brennan",
+                dob_display="1988-11-02",
+                age_years=37,
+                phone_display="(415) 555-0890",
+                email="theo.b@example.invalid",
+                address="221 Townsend St, San Francisco, CA 94107",
+                preferred_language="es",
+                customer_id=customer_id,
+                engagement_score=0.42,
+                sentiment_score=0.31,
+                trust_score=0.81,
+                care_team=(
+                    PatientCareTeamMember(
+                        "Dr. Lin Hwang", "Sports Medicine", is_primary=True
+                    ),
+                    PatientCareTeamMember("Jordan Ellis", "Care Navigator"),
+                ),
+                insurance=PatientInsurance(
+                    payer="United Healthcare",
+                    member_id="UHC-877-016",
+                    plan="HMO Choice",
+                    eligibility_status="pending",
+                    last_verified_at=now - timedelta(days=21),
+                ),
+                timeline=(
+                    event(
+                        2,
+                        "escalation",
+                        "Sentinel escalation — frustration spike",
+                        "Caller reported third reschedule; routed to live agent.",
+                        "critical",
+                    ),
+                    event(
+                        3,
+                        "voice_call",
+                        "Voice retry — booking confusion",
+                        "Frustration detected mid-call; agent reassured patient.",
+                        "warning",
+                    ),
+                    event(
+                        50,
+                        "appointment",
+                        "Appointment rescheduled",
+                        "Original slot conflicted with provider time-off.",
+                        "info",
+                    ),
+                    event(
+                        120,
+                        "note",
+                        "Care navigator note",
+                        "Patient prefers Spanish call-backs after 5pm PT.",
+                        "info",
+                    ),
+                ),
+            ),
+        )
+        return roster
+
+    # Default tenant — ophthalmology.
+    roster = (
+        PatientProfile(
+            patient_id="pt_oph_2017",
+            display_name="Avery Sinclair",
+            dob_display="1956-09-30",
+            age_years=68,
+            phone_display="(206) 555-3104",
+            email="avery.s@example.invalid",
+            address="118 Pine St, Seattle, WA 98101",
+            preferred_language="en",
+            customer_id=customer_id,
+            engagement_score=0.78,
+            sentiment_score=0.66,
+            trust_score=0.95,
+            care_team=(
+                PatientCareTeamMember(
+                    "Dr. Ines Park", "Retina Specialist", is_primary=True
+                ),
+                PatientCareTeamMember("Camille Ortega, OD", "Optometrist"),
+                PatientCareTeamMember("Robin Lutz", "Patient Liaison"),
+            ),
+            insurance=PatientInsurance(
+                payer="Premera Blue Cross",
+                member_id="PBC-3318-104",
+                plan="HMO Standard",
+                eligibility_status="active",
+                last_verified_at=now - timedelta(days=2),
+            ),
+            timeline=(
+                event(
+                    6,
+                    "voice_call",
+                    "Voice intake — cataract pre-op",
+                    "Reviewed pre-op fasting + dilation drops protocol.",
+                    "info",
+                ),
+                event(
+                    30,
+                    "appointment",
+                    "Appointment confirmed",
+                    "Cataract consult with Dr. Park on Friday at 10:30.",
+                    "healthy",
+                ),
+                event(
+                    54,
+                    "eligibility",
+                    "Eligibility verified",
+                    "Premera HMO active; pre-op covered with $50 co-pay.",
+                    "healthy",
+                ),
+                event(
+                    102,
+                    "note",
+                    "Care team note",
+                    "Patient reports mild floaters; flagged for retina review.",
+                    "info",
+                ),
+            ),
+        ),
+        PatientProfile(
+            patient_id="pt_oph_2042",
+            display_name="Mira Khoury",
+            dob_display="1991-02-14",
+            age_years=34,
+            phone_display="(206) 555-7782",
+            email="mira.k@example.invalid",
+            address="2400 Westlake Ave N, Seattle, WA 98109",
+            preferred_language="ar",
+            customer_id=customer_id,
+            engagement_score=0.53,
+            sentiment_score=0.74,
+            trust_score=0.88,
+            care_team=(
+                PatientCareTeamMember(
+                    "Dr. Salim Rahimi", "General Ophthalmology", is_primary=True
+                ),
+                PatientCareTeamMember("Ana Belmonte, OD", "Optometrist"),
+            ),
+            insurance=PatientInsurance(
+                payer="Kaiser Permanente",
+                member_id="KP-8821-704",
+                plan="PPO Plus",
+                eligibility_status="active",
+                last_verified_at=now - timedelta(days=11),
+            ),
+            timeline=(
+                event(
+                    1,
+                    "appointment",
+                    "Appointment booked",
+                    "Glaucoma screening with Dr. Rahimi next Tuesday.",
+                    "healthy",
+                ),
+                event(
+                    12,
+                    "voice_call",
+                    "Voice intake — screening inquiry",
+                    "Caller asked about IOP follow-up scheduling.",
+                    "info",
+                ),
+                event(
+                    72,
+                    "pms_task",
+                    "PMS task: send glaucoma education packet",
+                    "Routed to patient-support queue; delivered via email.",
+                    "info",
+                ),
+            ),
+        ),
+    )
+    return roster
+
+
+def build_patient_360(
+    customer_id: str,
+    *,
+    selected_patient_id: str | None = None,
+) -> Patient360Snapshot:
+    """Build a Patient360Snapshot for one tenant.
+
+    Currently uses synthetic patients. A future task can switch
+    this to read from `data/<tenant>/patients.sqlite` (or wherever
+    the M1 PMS writeback lands long-form patient records).
+    """
+    patients = _synthetic_patient_360(customer_id)
+    selected: PatientProfile | None = None
+    if selected_patient_id is not None:
+        for p in patients:
+            if p.patient_id == selected_patient_id:
+                selected = p
+                break
+    if selected is None and patients:
+        selected = patients[0]
+    return Patient360Snapshot(
+        schema_version=_PATIENT_360_SCHEMA_VERSION,
+        customer_id=customer_id,
+        patients=patients,
+        selected=selected,
+    )
+
+
 __all__ = [
     "AgentFlowSnapshot",
     "AuditTailItem",
@@ -1915,6 +2305,11 @@ __all__ = [
     "JudgeAgreement",
     "LatencyBreakdown",
     "NoShowRiskBucket",
+    "Patient360Snapshot",
+    "PatientCareTeamMember",
+    "PatientInsurance",
+    "PatientProfile",
+    "PatientTimelineEvent",
     "PmsTaskRow",
     "ProviderUtilization",
     "SentinelOpsSnapshot",
@@ -1927,6 +2322,7 @@ __all__ = [
     "build_cost_slo",
     "build_global_kpis",
     "build_healthcare_ops",
+    "build_patient_360",
     "build_sentinel_ops",
     "build_tenant_snapshot",
     "build_voice_intelligence",

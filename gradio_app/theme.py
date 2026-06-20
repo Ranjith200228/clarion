@@ -47,9 +47,9 @@ PALETTE: Final[dict[str, str]] = {
     "border":        "#1F2937",  # 1 px dividers
     "border_strong": "#374151",
     # Text.
-    "text":          "#E5E7EB",  # body
-    "text_strong":   "#F9FAFB",  # headings + KPI values
-    "text_muted":    "#9CA3AF",  # labels + helper copy
+    "text":          "#F1F5F9",  # body
+    "text_strong":   "#FFFFFF",  # headings + KPI values
+    "text_muted":    "#CBD5E1",  # labels + helper copy
     # Brand accent — cyan from the v2 plan.
     "accent":        "#06B6D4",
     "accent_dim":    "#0E7490",

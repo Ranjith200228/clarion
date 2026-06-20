@@ -29,10 +29,12 @@
     --c-border:        #1F2937;
     --c-border-strong: #374151;
 
-    /* Text. */
-    --c-text:          #E5E7EB;
-    --c-text-strong:   #F9FAFB;
-    --c-text-muted:    #9CA3AF;
+    /* Text. Tuned for high contrast on the navy #0B1220 bg —
+     * prior values (#E5E7EB / #9CA3AF) tested as too dim on
+     * the live Space, especially for "muted" labels. */
+    --c-text:          #F1F5F9;
+    --c-text-strong:   #FFFFFF;
+    --c-text-muted:    #CBD5E1;
 
     /* Brand. */
     --c-accent:        #06B6D4;
@@ -443,8 +445,14 @@
     font-size: var(--fs-xl);
     font-weight: var(--fw-bold);
     color: var(--c-text-strong);
-    letter-spacing: -0.01em;
+    letter-spacing: 0.02em;
     line-height: 1.1;
+    text-transform: uppercase;
+}
+.clarion-brand-suffix {
+    color: var(--c-accent);
+    font-weight: var(--fw-medium);
+    letter-spacing: 0.06em;
 }
 .clarion-brand-tagline {
     font-size: var(--fs-xs);
@@ -511,3 +519,63 @@
     color: var(--c-accent) !important;
     font-weight: var(--fw-semibold) !important;
 }
+
+/* ============================================================
+ * Phase H — readability overrides for native Gradio widgets
+ *
+ * Gradio's Dropdown / Textbox / Label widgets ship with their
+ * own colour pipeline that ignored our brand tokens, leaving
+ * the input values noticeably dim on the navy backdrop. These
+ * rules force Gradio inputs to render in our high-contrast
+ * palette so dropdown values, label captions, and info text
+ * stay legible.
+ * ============================================================ */
+.gradio-container input,
+.gradio-container select,
+.gradio-container textarea,
+.gradio-container .wrap input,
+.gradio-container .wrap select,
+.gradio-container [data-testid] input,
+.gradio-container [data-testid] select {
+    color: var(--c-text-strong) !important;
+    background: var(--c-bg-panel) !important;
+    border-color: var(--c-border) !important;
+}
+.gradio-container input::placeholder,
+.gradio-container textarea::placeholder {
+    color: var(--c-text-muted) !important;
+    opacity: 0.8;
+}
+.gradio-container label,
+.gradio-container .label-wrap > span,
+.gradio-container span[data-testid$="-label"] {
+    color: var(--c-text-strong) !important;
+    font-weight: var(--fw-medium);
+}
+.gradio-container .info-text,
+.gradio-container [data-testid$="-info"],
+.gradio-container .label-wrap + p,
+.gradio-container .help {
+    color: var(--c-text) !important;
+    opacity: 0.85;
+}
+/* Dropdown's options list (rendered in a popover/portal) */
+.gradio-container ul[role="listbox"],
+.gradio-container .options {
+    background: var(--c-bg-panel) !important;
+    border: 1px solid var(--c-border) !important;
+    color: var(--c-text) !important;
+}
+.gradio-container ul[role="listbox"] li,
+.gradio-container .options .item {
+    color: var(--c-text) !important;
+}
+.gradio-container ul[role="listbox"] li[aria-selected="true"],
+.gradio-container .options .item.selected {
+    background: var(--c-bg-subtle) !important;
+    color: var(--c-accent) !important;
+}
+/* Make sure the brand tagline reads cleanly. The
+ * .clarion-brand-tagline rule below already uses
+ * --c-text-muted; with the bumped value above it's now ~10:1
+ * contrast on navy. */

@@ -398,12 +398,48 @@ def brand_strip(
     customer-bound), so it's safe to render statically once and
     never rebuild.
     """
+    # SVG mark — a faceted hex/diamond made of cyan gradient
+    # planes. Reads as a stylised mission-control sigil; crisp at
+    # any size and free of Unicode font dependencies.
+    logo_svg = (
+        '<svg class="clarion-brand-mark" viewBox="0 0 36 36" '
+        'width="38" height="38" xmlns="http://www.w3.org/2000/svg" '
+        'aria-label="Clarion Vision">'
+        "<defs>"
+        '<linearGradient id="clarion-logo-grad" x1="0%" y1="0%" '
+        'x2="100%" y2="100%">'
+        '<stop offset="0%" stop-color="#22D3EE"/>'
+        '<stop offset="100%" stop-color="#0E7490"/>'
+        "</linearGradient>"
+        '<linearGradient id="clarion-logo-face" x1="0%" y1="0%" '
+        'x2="100%" y2="100%">'
+        '<stop offset="0%" stop-color="#67E8F9" stop-opacity="0.95"/>'
+        '<stop offset="100%" stop-color="#0891B2" stop-opacity="0.9"/>'
+        "</linearGradient>"
+        "</defs>"
+        # Outer hexagon — the badge frame
+        '<polygon points="18,3 31,10.5 31,25.5 18,33 5,25.5 5,10.5" '
+        'fill="rgba(6, 182, 212, 0.10)" '
+        'stroke="url(#clarion-logo-grad)" stroke-width="1.5" '
+        'stroke-linejoin="round"/>'
+        # Inner diamond — facet 1 (front)
+        '<polygon points="18,9 26,18 18,27 10,18" '
+        'fill="url(#clarion-logo-face)" '
+        'stroke="#67E8F9" stroke-width="1" '
+        'stroke-linejoin="round"/>'
+        # Inner highlight — facet 2 (top-right reflection)
+        '<polygon points="18,9 26,18 18,18" '
+        'fill="rgba(255, 255, 255, 0.18)"/>'
+        "</svg>"
+    )
     return (
         '<div class="clarion-brand-strip">'
         '<div class="clarion-brand-left">'
-        '<div class="clarion-brand-mark" aria-hidden="true">◐</div>'
-        '<div class="clarion-brand-text">'
-        '<div class="clarion-brand-name">Clarion</div>'
+        + logo_svg
+        + '<div class="clarion-brand-text">'
+        '<div class="clarion-brand-name">'
+        'Clarion <span class="clarion-brand-suffix">Vision</span>'
+        "</div>"
         f'<div class="clarion-brand-tagline">{_esc(tagline)}</div>'
         "</div>"
         "</div>"
