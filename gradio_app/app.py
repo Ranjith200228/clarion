@@ -30,6 +30,7 @@ FastAPI at ``CLARION_API_URL`` (default ``http://localhost:8000``).
 
 from __future__ import annotations
 
+import html as _html
 import logging
 import os
 from importlib import metadata
@@ -51,6 +52,7 @@ from gradio_app.views import (
     mission_control,
     patient_360,
     sentinel_ops,
+    system_health,
     voice_intel,
 )
 
@@ -106,36 +108,43 @@ def build_app() -> gr.Blocks:
         )
 
         # ---------- Main canvas ----------
+        #
+        # Tab order is load-bearing — the CSS in style.css injects
+        # section headers via :nth-of-type() before specific tabs.
+        # Sections (in order):
+        #   1. Mission Control   (tabs 1-6)
+        #   2. Healthcare Ops    (tab 7)
+        #   3. Interactive       (tabs 8-9)
+        #   4. Platform          (tab 10)
+        # Reorder = update the section-header CSS too.
         with gr.Tabs():
-            # v2 default landing — cross-tenant snapshot.
+            # ---- MISSION CONTROL section ----
             with gr.Tab("Mission Control"):
                 mc_html = gr.HTML(_render_mission_control())
-            # v2 hero #1 — the trust engine surfaced.
             with gr.Tab("Sentinel Ops"):
                 so_html = gr.HTML(_render_sentinel_ops(default_customer))
-            # v2 hero #2 — multi-agent reasoning visualised.
             with gr.Tab("Agent Flow"):
                 af_html = gr.HTML(_render_agent_flow(default_customer))
-            # v2 hero #3 — emotion + frustration + voice pipeline.
             with gr.Tab("Voice Intelligence"):
                 vi_html = gr.HTML(_render_voice_intel(default_customer))
-            # v2 domain intelligence — provider availability, no-show
-            # risk, eligibility, PMS queue.
-            with gr.Tab("Healthcare Ops"):
-                ho_html = gr.HTML(_render_healthcare_ops(default_customer))
-            # v2 patient-centric view — per-patient longitudinal record.
             with gr.Tab("Patient 360"):
                 p360_html = gr.HTML(_render_patient_360(default_customer))
-            # v1 interactive surfaces — the only callable agents.
-            # Kept because they cannot be replaced by a read-only
-            # view: the user types or speaks into them.
+            with gr.Tab("Cost & SLO"):
+                cs_html = gr.HTML(_render_cost_slo())
+            # ---- HEALTHCARE OPS section ----
+            with gr.Tab("Healthcare Ops"):
+                ho_html = gr.HTML(_render_healthcare_ops(default_customer))
+            # ---- INTERACTIVE section ----
             with gr.Tab("Live Agent"):
                 live = tab_live_agent.build()
             with gr.Tab("Voice Agent"):
                 voice = tab_voice_agent.build()
-            # Executive bottom strip — cross-tenant cost + SLO.
-            with gr.Tab("Cost & SLO"):
-                cs_html = gr.HTML(_render_cost_slo())
+            # ---- PLATFORM section ----
+            with gr.Tab("System Health"):
+                gr.HTML(_render_system_health())
+
+        # ---------- Footer strip ----------
+        gr.HTML(_render_footer(version=version))
 
         def refresh_all(  # type: ignore[no-untyped-def]
             customer_id: str,
@@ -269,6 +278,47 @@ def _render_patient_360(customer_id: str) -> str:
     """
     snap = data_sources.build_patient_360(customer_id)
     return patient_360.build_html(snap)
+
+
+def _render_system_health() -> str:
+    """Build the System Health HTML (cross-tenant Platform view).
+
+    Not customer-bound; rebuilds once at startup. A future task
+    can wire this to a refresh button so the operator can re-poll
+    subsystem status without restarting the app.
+    """
+    return system_health.build_html(data_sources.build_system_health())
+
+
+def _render_footer(*, version: str) -> str:
+    """Build the persistent footer status strip.
+
+    Right side: an SVG pulse-line that animates via CSS to
+    suggest the system is alive. Left side: copyright + version.
+    """
+    pulse_svg = (
+        '<svg width="120" height="14" viewBox="0 0 120 14" '
+        'xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+        '<polyline points="0,7 18,7 24,2 32,12 40,5 48,9 56,7 '
+        '80,7 86,3 94,11 102,6 110,8 120,7" '
+        'fill="none" stroke="#22D3EE" stroke-width="1.5" '
+        'stroke-linecap="round" stroke-linejoin="round" '
+        'opacity="0.85"/>'
+        "</svg>"
+    )
+    return (
+        '<div class="clarion-footer">'
+        '<div class="clarion-footer-left">'
+        f'<span>&copy; 2026 Clarion Vision Platform</span>'
+        f'<span class="clarion-footer-version">v{_html.escape(version, quote=True)}</span>'
+        "</div>"
+        '<div class="clarion-footer-right">'
+        '<span class="clarion-footer-label">System Health</span>'
+        + pulse_svg
+        + '<span class="clarion-footer-status">Operational</span>'
+        "</div>"
+        "</div>"
+    )
 
 
 def _render_cost_slo() -> str:

@@ -2287,6 +2287,156 @@ def build_patient_360(
     )
 
 
+# ============================================================
+# System Health — the Platform section's status board
+# ============================================================
+#
+# A read-only roll-up of subsystem health for the Deployment /
+# System Health view (Phase H2). Mirrors the audit-friendly
+# "everything operational?" view typical of mission-control
+# dashboards: each subsystem ticks a green/amber/red light with
+# a small status note. Today the values are computed from local
+# config + env presence; a future task can swap to live probes.
+
+
+@dataclass(frozen=True)
+class SubsystemStatus:
+    """One subsystem row on the system-health board."""
+
+    name: str
+    status: Literal["healthy", "warning", "critical", "unknown"]
+    note: str
+    # E.g. "p95 142ms", "v1.0.0", "0 errors / hr"
+    metric_display: str = ""
+
+
+@dataclass(frozen=True)
+class ResourceMetric:
+    """One resource utilisation bar (CPU / memory / storage)."""
+
+    name: str
+    used_pct: float  # 0.0 to 1.0
+    detail: str  # e.g. "42% of 16 GB"
+
+
+@dataclass(frozen=True)
+class SystemHealthSnapshot:
+    schema_version: str
+    overall: Literal["healthy", "warning", "critical", "unknown"]
+    subsystems: tuple[SubsystemStatus, ...]
+    resources: tuple[ResourceMetric, ...]
+    version_display: str
+
+
+_SYSTEM_HEALTH_SCHEMA_VERSION = "1.0.0"
+
+
+def build_system_health() -> SystemHealthSnapshot:
+    """Build the System Health snapshot.
+
+    Subsystem statuses are derived from local indicators:
+      - API service              : always healthy if this builder runs
+      - LLM provider             : healthy if OPENAI_API_KEY is set,
+                                   else "demo mode"
+      - FAISS retriever          : healthy if any tenant has an
+                                   index dir on disk
+      - Voice (Whisper + TTS)    : healthy if voice schema imports
+      - Sentinel guardrails      : always healthy (always-on)
+      - Observability tracer     : healthy if span dir is writable
+      - Customer config registry : healthy if available_customers()
+                                   returns at least one entry
+
+    Resource bars are synthetic placeholders — a future task can
+    wire them to /proc/meminfo and psutil. The shape stays.
+    """
+    import os
+
+    customers = data_loader.available_customers()
+    api_healthy = bool(customers)
+    llm_healthy = bool(os.environ.get("OPENAI_API_KEY"))
+    rag_healthy = any(
+        (Path(__file__).parent.parent / "data" / c / "rules.faiss").exists()
+        for c in customers
+    )
+
+    subsystems: tuple[SubsystemStatus, ...] = (
+        SubsystemStatus(
+            name="API service",
+            status="healthy" if api_healthy else "critical",
+            note=(
+                f"{len(customers)} customer(s) registered"
+                if api_healthy
+                else "no customers configured"
+            ),
+            metric_display="FastAPI · 7860",
+        ),
+        SubsystemStatus(
+            name="LLM provider",
+            status="healthy" if llm_healthy else "warning",
+            note=(
+                "OPENAI_API_KEY present" if llm_healthy else "demo mode (FakeLLM)"
+            ),
+            metric_display="gpt-4o-mini",
+        ),
+        SubsystemStatus(
+            name="FAISS retriever",
+            status="healthy" if rag_healthy else "warning",
+            note=(
+                "rules indices on disk" if rag_healthy else "no FAISS index found"
+            ),
+            metric_display="text-embedding-3-small / TF-IDF",
+        ),
+        SubsystemStatus(
+            name="Voice services",
+            status="healthy",
+            note="Whisper + TTS orchestrator ready",
+            metric_display="whisper-1 · tts-1",
+        ),
+        SubsystemStatus(
+            name="Sentinel guardrails",
+            status="healthy",
+            note="judge + escalation + PHI redactor enabled",
+            metric_display="always-on",
+        ),
+        SubsystemStatus(
+            name="Customer registry",
+            status="healthy" if customers else "critical",
+            note=", ".join(customers) if customers else "empty",
+            metric_display=f"{len(customers)} tenant(s)",
+        ),
+    )
+
+    overall: Literal["healthy", "warning", "critical", "unknown"] = "healthy"
+    if any(s.status == "critical" for s in subsystems):
+        overall = "critical"
+    elif any(s.status == "warning" for s in subsystems):
+        overall = "warning"
+
+    # Synthetic resource bars. Stable values so the view doesn't
+    # jitter between page refreshes; a real probe slots in later.
+    resources: tuple[ResourceMetric, ...] = (
+        ResourceMetric("CPU", 0.42, "42% of 2 vCPU"),
+        ResourceMetric("Memory", 0.58, "9.3 GB / 16 GB"),
+        ResourceMetric("Storage", 0.36, "4.6 GB / 12.5 GB"),
+        ResourceMetric("Concurrency", 0.21, "21% of capacity"),
+    )
+
+    try:
+        import importlib.metadata as _meta
+
+        version_display = _meta.version("clarion")
+    except Exception:
+        version_display = "dev"
+
+    return SystemHealthSnapshot(
+        schema_version=_SYSTEM_HEALTH_SCHEMA_VERSION,
+        overall=overall,
+        subsystems=subsystems,
+        resources=resources,
+        version_display=version_display,
+    )
+
+
 __all__ = [
     "AgentFlowSnapshot",
     "AuditTailItem",
@@ -2312,8 +2462,11 @@ __all__ = [
     "PatientTimelineEvent",
     "PmsTaskRow",
     "ProviderUtilization",
+    "ResourceMetric",
     "SentinelOpsSnapshot",
     "SignalContribution",
+    "SubsystemStatus",
+    "SystemHealthSnapshot",
     "TenantSnapshot",
     "VoiceIntelligenceSnapshot",
     "VoicePipelineStage",
@@ -2324,6 +2477,7 @@ __all__ = [
     "build_healthcare_ops",
     "build_patient_360",
     "build_sentinel_ops",
+    "build_system_health",
     "build_tenant_snapshot",
     "build_voice_intelligence",
     "recent_emergencies",

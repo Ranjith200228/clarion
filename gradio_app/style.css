@@ -579,3 +579,93 @@
  * .clarion-brand-tagline rule below already uses
  * --c-text-muted; with the bumped value above it's now ~10:1
  * contrast on navy. */
+
+
+/* ============================================================
+ * Phase H2 — sectioned left-rail nav
+ *
+ * The tab list itself is the vertical list we styled earlier.
+ * The four section headers (MISSION CONTROL, HEALTHCARE OPS,
+ * INTERACTIVE, PLATFORM) are injected as `::before` content on
+ * specific tabs via :nth-of-type(). Order in gradio_app/app.py
+ * is load-bearing — change tab order, update these selectors.
+ *
+ * Section break-points (1-indexed):
+ *   tab 1  → MISSION CONTROL  (Mission Control)
+ *   tab 7  → HEALTHCARE OPS   (Healthcare Ops)
+ *   tab 8  → INTERACTIVE      (Live Agent)
+ *   tab 10 → PLATFORM         (System Health)
+ * ============================================================ */
+.gradio-container [role="tablist"] button[role="tab"]:nth-of-type(1)::before,
+.gradio-container [role="tablist"] button[role="tab"]:nth-of-type(7)::before,
+.gradio-container [role="tablist"] button[role="tab"]:nth-of-type(8)::before,
+.gradio-container [role="tablist"] button[role="tab"]:nth-of-type(10)::before {
+    display: block;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    font-weight: var(--fw-bold);
+    padding: 12px 0 6px;
+    border-top: 1px solid var(--c-border);
+    margin-top: 6px;
+    text-align: left;
+    opacity: 0.85;
+}
+.gradio-container [role="tablist"] button[role="tab"]:nth-of-type(1)::before {
+    content: "Mission Control";
+    border-top: none;
+    margin-top: 0;
+    padding-top: 0;
+}
+.gradio-container [role="tablist"] button[role="tab"]:nth-of-type(7)::before {
+    content: "Healthcare Ops";
+}
+.gradio-container [role="tablist"] button[role="tab"]:nth-of-type(8)::before {
+    content: "Interactive";
+}
+.gradio-container [role="tablist"] button[role="tab"]:nth-of-type(10)::before {
+    content: "Platform";
+}
+
+
+/* ============================================================
+ * Phase H2 — persistent footer strip
+ * ============================================================ */
+.clarion-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-4);
+    padding: var(--sp-3) var(--sp-5);
+    margin-top: var(--sp-4);
+    background: var(--c-bg-panel);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-lg);
+    font-size: var(--fs-xs);
+    color: var(--c-text-muted);
+}
+.clarion-footer-left,
+.clarion-footer-right {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+}
+.clarion-footer-version {
+    font-family: var(--font-mono);
+    color: var(--c-text-muted);
+    padding: 1px var(--sp-2);
+    background: var(--c-bg-subtle);
+    border-radius: var(--r-sm);
+}
+.clarion-footer-label {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: var(--fw-semibold);
+}
+.clarion-footer-status {
+    color: var(--c-healthy);
+    font-weight: var(--fw-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
