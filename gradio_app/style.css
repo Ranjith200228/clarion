@@ -315,37 +315,106 @@
     white-space: nowrap;
 }
 
-/* Agent flow node — used in the live SVG diagram (Phase D). */
+/* Agent flow node - used in the live SVG diagram (Phase D,
+ * polished in Phase H7).
+ *
+ * Layout: header row with status dot + name, optional meta
+ * footer (latency + cost) below. CSS owns the gradient bg, the
+ * dot colour by state, and a subtle hover lift.
+ */
 .clarion-agent-node {
     display: flex;
     flex-direction: column;
-    gap: var(--sp-1);
-    min-width: 140px;
+    gap: var(--sp-2);
+    min-width: 148px;
     padding: var(--sp-3);
-    background: var(--c-bg-panel);
+    background: linear-gradient(
+        135deg,
+        var(--c-bg-panel) 0%,
+        var(--c-bg-subtle) 100%
+    );
     border: 1px solid var(--c-border);
-    border-radius: var(--r-md);
+    border-radius: var(--r-lg);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
     transition: border-color var(--t-med) var(--ease-out),
-                box-shadow var(--t-med) var(--ease-out);
+                box-shadow var(--t-med) var(--ease-out),
+                transform var(--t-fast) var(--ease-out);
+}
+.clarion-agent-node:hover {
+    transform: translateY(-1px);
 }
 .clarion-agent-node[data-state="active"] {
     border-color: var(--c-accent);
-    box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.18);
+    box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.22),
+                0 1px 0 rgba(255, 255, 255, 0.05) inset;
 }
 .clarion-agent-node[data-state="done"]      { border-color: var(--c-healthy); }
 .clarion-agent-node[data-state="escalated"] { border-color: var(--c-critical); }
+.clarion-agent-node[data-state="pending"]   { opacity: 0.55; }
+
+/* Header row: dot + name. */
+.clarion-agent-node-header {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+}
+.clarion-agent-node-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--c-text-muted);
+    box-shadow: 0 0 0 3px rgba(156, 163, 175, 0.18);
+    flex-shrink: 0;
+}
+.clarion-agent-node[data-state="active"] .clarion-agent-node-dot {
+    background: var(--c-accent);
+    box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.28);
+    animation: clarion-agent-node-pulse 1.6s ease-in-out infinite;
+}
+.clarion-agent-node[data-state="done"] .clarion-agent-node-dot {
+    background: var(--c-healthy);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.22);
+}
+.clarion-agent-node[data-state="escalated"] .clarion-agent-node-dot {
+    background: var(--c-critical);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.22);
+}
+@keyframes clarion-agent-node-pulse {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.28); }
+    50%      { box-shadow: 0 0 0 6px rgba(6, 182, 212, 0.10); }
+}
 .clarion-agent-node-name {
     font-size: var(--fs-sm);
     font-weight: var(--fw-semibold);
     color: var(--c-text-strong);
+    letter-spacing: 0.01em;
 }
+
+/* Meta footer: latency + cost grid. */
 .clarion-agent-node-meta {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--sp-3);
     font-size: var(--fs-xs);
-    color: var(--c-text-muted);
+    color: var(--c-text);
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
+    padding-top: var(--sp-1);
+    border-top: 1px dashed var(--c-border);
+    margin-top: 2px;
+}
+.clarion-agent-node-meta-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--sp-1);
+}
+.clarion-agent-node-meta-key {
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    color: var(--c-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 9px;
+    font-weight: var(--fw-semibold);
 }
 
 /* Cost chip — monospace pill for $ values. */

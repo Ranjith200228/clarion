@@ -538,25 +538,38 @@ def agent_node(
     ms: int | None = None,
     cost_usd: float | None = None,
 ) -> str:
-    """One node in the Agent Flow SVG (Phase D).
+    """One node in the Agent Flow SVG (Phase D, polished in H7).
 
-    The node itself is a styled card; the connector lines + animation
-    are owned by the view, which composes multiple nodes into the
-    full diagram.
+    The node is a card with a state-colored indicator dot in the
+    top-left, the name beside it, and a meta footer below
+    showing latency + cost. CSS owns the gradient + border.
+    Connector lines + animation are owned by the view, which
+    composes multiple nodes into the full diagram.
     """
     meta_parts: list[str] = []
     if ms is not None:
-        meta_parts.append(f"<span>{ms} ms</span>")
+        meta_parts.append(
+            f'<span class="clarion-agent-node-meta-item">'
+            f'<span class="clarion-agent-node-meta-key">latency</span>'
+            f"<span>{ms} ms</span></span>"
+        )
     if cost_usd is not None:
-        meta_parts.append(f"<span>${cost_usd:.4f}</span>")
+        meta_parts.append(
+            f'<span class="clarion-agent-node-meta-item">'
+            f'<span class="clarion-agent-node-meta-key">cost</span>'
+            f"<span>${cost_usd:.4f}</span></span>"
+        )
     meta_html = (
-        f'<div class="clarion-agent-node-meta">{" ".join(meta_parts)}</div>'
+        f'<div class="clarion-agent-node-meta">{"".join(meta_parts)}</div>'
         if meta_parts
         else ""
     )
     return (
         f'<div class="clarion-agent-node" data-state="{state}">'
-        f'<div class="clarion-agent-node-name">{_esc(name)}</div>'
+        f'<div class="clarion-agent-node-header">'
+        f'<span class="clarion-agent-node-dot" aria-hidden="true"></span>'
+        f'<span class="clarion-agent-node-name">{_esc(name)}</span>'
+        f"</div>"
         f"{meta_html}"
         "</div>"
     )
