@@ -889,3 +889,117 @@
 .clarion-empty-state svg {
     opacity: 0.9;
 }
+
+
+/* ============================================================
+ * Phase H11 - loading skeleton primitives
+ *
+ * Apply `.clarion-skeleton` to any block to give it the
+ * shimmer effect. Modifier classes set the shape:
+ *   .clarion-skeleton-line     - 12px row with rounded ends
+ *   .clarion-skeleton-block    - taller rectangular block
+ *   .clarion-skeleton-circle   - 32px round (avatar / dot)
+ * Add inline width: or use Tailwind-style w-* if the harness
+ * later picks one up. Animation respects prefers-reduced-motion.
+ * ============================================================ */
+@keyframes clarion-skeleton-shimmer {
+    0%   { background-position: -200px 0; }
+    100% { background-position: 200px 0; }
+}
+.clarion-skeleton {
+    display: block;
+    background: linear-gradient(
+        90deg,
+        var(--c-bg-subtle) 0%,
+        var(--c-border) 50%,
+        var(--c-bg-subtle) 100%
+    );
+    background-size: 400px 100%;
+    animation: clarion-skeleton-shimmer 1.6s linear infinite;
+    border-radius: var(--r-sm);
+}
+.clarion-skeleton-line {
+    height: 12px;
+    width: 100%;
+}
+.clarion-skeleton-block {
+    height: 64px;
+    width: 100%;
+}
+.clarion-skeleton-circle {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+}
+@media (prefers-reduced-motion: reduce) {
+    .clarion-skeleton {
+        animation: none;
+        background: var(--c-bg-subtle);
+    }
+}
+
+
+/* ============================================================
+ * Phase H11 - incident drill-down (<details>/<summary>)
+ *
+ * Wraps emergency rows in a native HTML disclosure widget so
+ * the operator can expand for full context (summary, tenant
+ * context, recommended action) without leaving the page.
+ * Native <details> means zero JS and keyboard-nav for free.
+ * ============================================================ */
+.clarion-drill-down {
+    border-left: 3px solid var(--c-critical);
+    background: var(--c-bg-panel);
+    border-radius: var(--r-md);
+    overflow: hidden;
+}
+.clarion-drill-down + .clarion-drill-down {
+    margin-top: 6px;
+}
+.clarion-drill-down summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 8px 12px;
+    transition: background var(--t-fast) var(--ease-out);
+}
+.clarion-drill-down summary::-webkit-details-marker {
+    display: none;
+}
+.clarion-drill-down summary:hover {
+    background: var(--c-bg-subtle);
+}
+.clarion-drill-down[open] summary {
+    background: var(--c-bg-subtle);
+    border-bottom: 1px solid var(--c-border);
+}
+.clarion-drill-down .drill-arrow {
+    display: inline-block;
+    transition: transform var(--t-fast) var(--ease-out);
+    color: var(--c-text-muted);
+}
+.clarion-drill-down[open] .drill-arrow {
+    transform: rotate(90deg);
+}
+.clarion-drill-down-body {
+    padding: 12px 14px;
+    font-size: var(--fs-xs);
+    color: var(--c-text);
+    background: var(--c-bg);
+}
+.clarion-drill-down-fact {
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 8px;
+    padding: 4px 0;
+    border-bottom: 1px dashed var(--c-border);
+}
+.clarion-drill-down-fact:last-child {
+    border-bottom: none;
+}
+.clarion-drill-down-fact-key {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--c-text-muted);
+    font-weight: var(--fw-semibold);
+}

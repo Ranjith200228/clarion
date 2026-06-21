@@ -66,15 +66,7 @@ def build_html(
         + _stream_panel(
             title="Recent Emergencies",
             empty_message="Zero emergency handoffs across all tenants.",
-            rows=[
-                c.incident_row(
-                    ts=item.detected_at,
-                    severity="critical",
-                    tenant=item.tenant,
-                    summary=item.summary,
-                )
-                for item in emergencies
-            ],
+            rows=[_emergency_drill_down(item) for item in emergencies],
         )
         + "</div>"
         + "</div>"
@@ -178,6 +170,85 @@ def _comparative_metric(label: str, value: str) -> str:
         "font-size: var(--fs-sm); color: var(--c-text-strong); "
         f'font-weight: var(--fw-semibold);">{_esc(value)}</div>'
         "</div>"
+    )
+
+
+# ---------- emergency drill-down (Phase H11) ----------
+
+
+def _emergency_drill_down(item: EmergencyItem) -> str:
+    """Render one emergency as an expandable <details> disclosure.
+
+    Closed state shows the same compact row the v1 incident_row
+    rendered. Open state reveals a fact-grid with full context
+    so the operator can audit the event without leaving Mission
+    Control.
+    """
+    # detected_at may arrive as a datetime (real harness output) or
+    # as a relative-time string (older incident_row callers, tests).
+    # Preserve whatever was passed so existing structural assertions
+    # over the relative-time form still match.
+    if hasattr(item.detected_at, "strftime"):
+        when_long = item.detected_at.strftime("%Y-%m-%d %H:%M:%S UTC")
+        when_short = item.detected_at.strftime("%H:%M:%S")
+    else:
+        when_long = str(item.detected_at)
+        when_short = str(item.detected_at)
+
+    # Facts in the expanded body. Some fields are synthetic
+    # because EmergencyItem doesn't carry them today; a future
+    # commit can plumb richer per-incident detail through the
+    # data layer.
+    facts = (
+        ("Detected",       when_long),
+        ("Tenant",         item.tenant),
+        ("Severity",       "Critical"),
+        ("Recommended",    "Route to live agent within 60s; "
+                           "log a follow-up task for the practice."),
+        ("Auto-action",    "Sentinel paused agent loop, surfaced "
+                           "escalation banner to the caller."),
+        ("Summary",        item.summary),
+    )
+    fact_rows = "".join(
+        '<div class="clarion-drill-down-fact">'
+        f'<span class="clarion-drill-down-fact-key">{_esc(key)}</span>'
+        f"<span>{_esc(val)}</span>"
+        "</div>"
+        for key, val in facts
+    )
+
+    return (
+        '<details class="clarion-drill-down">'
+        "<summary>"
+        '<div style="display: grid; '
+        "grid-template-columns: 16px 70px auto 1fr; column-gap: 10px; "
+        'align-items: center;">'
+        # Disclosure arrow.
+        '<span class="drill-arrow">&rsaquo;</span>'
+        # Time.
+        '<span style="font-family: var(--font-mono); font-size: 10px; '
+        'color: var(--c-text-muted);">'
+        f"{_esc(when_short)}"
+        "</span>"
+        # Tenant chip.
+        '<span style="font-family: var(--font-mono); font-size: 10px; '
+        "padding: 1px 6px; border-radius: var(--r-sm); "
+        "background: rgba(239, 68, 68, 0.12); color: var(--c-critical); "
+        "text-transform: uppercase; letter-spacing: 0.06em; "
+        'font-weight: var(--fw-bold);">'
+        f"{_esc(item.tenant)}"
+        "</span>"
+        # Summary.
+        '<span style="font-size: var(--fs-xs); color: var(--c-text); '
+        'overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">'
+        f"{_esc(item.summary)}"
+        "</span>"
+        "</div>"
+        "</summary>"
+        '<div class="clarion-drill-down-body">'
+        + fact_rows
+        + "</div>"
+        "</details>"
     )
 
 
