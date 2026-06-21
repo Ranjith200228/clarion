@@ -806,3 +806,86 @@
     color: var(--c-text-muted);
     font-size: 11px;
 }
+
+/* ============================================================
+ * Phase H8 - theme toggle button
+ * ============================================================ */
+.clarion-theme-toggle {
+    appearance: none;
+    background: transparent;
+    border: 1px solid var(--c-border);
+    color: var(--c-text-muted);
+    border-radius: var(--r-md);
+    padding: 6px 8px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background var(--t-fast) var(--ease-out),
+                color var(--t-fast) var(--ease-out),
+                border-color var(--t-fast) var(--ease-out);
+}
+.clarion-theme-toggle:hover {
+    background: var(--c-bg-subtle);
+    color: var(--c-accent);
+    border-color: var(--c-accent);
+}
+/* Show dark-mode moon icon by default; sun icon only when
+ * the body is in `theme-light` mode (so the icon shows the
+ * theme you would switch TO). */
+.clarion-theme-toggle .clarion-theme-icon-light { display: none; }
+.clarion-theme-toggle .clarion-theme-icon-dark  { display: block; }
+.theme-light .clarion-theme-toggle .clarion-theme-icon-light { display: block; }
+.theme-light .clarion-theme-toggle .clarion-theme-icon-dark  { display: none; }
+
+
+/* ============================================================
+ * Phase H8 - print-friendly stylesheet
+ *
+ * Hides chrome (nav, footer, brand strip, customer switcher)
+ * and prints the active view content full-width on white.
+ * The Patient 360 confirmation download is a separate
+ * self-contained doc, so this rule covers the rest of the app.
+ * ============================================================ */
+@media print {
+    body, .gradio-container {
+        background: white !important;
+        color: black !important;
+    }
+    .gradio-container [role="tablist"],
+    .clarion-brand-strip,
+    .clarion-footer,
+    .clarion-theme-toggle {
+        display: none !important;
+    }
+    .clarion-panel {
+        background: white !important;
+        border: 1px solid #d0d7de !important;
+        box-shadow: none !important;
+        break-inside: avoid;
+    }
+    .clarion-kpi-tile,
+    .clarion-tenant-card,
+    .clarion-agent-node {
+        background: white !important;
+        border: 1px solid #d0d7de !important;
+        break-inside: avoid;
+    }
+    .clarion-kpi-value,
+    .clarion-kpi-label,
+    .clarion-agent-node-name {
+        color: black !important;
+    }
+    svg text { fill: black !important; }
+}
+
+
+/* ============================================================
+ * Phase H8 - empty-state polish
+ * ============================================================ */
+.clarion-empty-state {
+    color: var(--c-text);
+}
+.clarion-empty-state svg {
+    opacity: 0.9;
+}

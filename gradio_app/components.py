@@ -668,6 +668,30 @@ def brand_strip(
         'fill="rgba(255, 255, 255, 0.18)"/>'
         "</svg>"
     )
+    # Theme toggle: sun/moon SVG that flips body's `theme-light`
+    # class on click. Inline onclick is the simplest cross-route
+    # to JS that survives Gradio's renderer.
+    theme_toggle = (
+        '<button class="clarion-theme-toggle" type="button" '
+        'title="Toggle light / dark theme" aria-label="Toggle theme" '
+        "onclick=\"document.body.classList.toggle('theme-light')\">"
+        '<svg class="clarion-theme-icon-dark" width="16" height="16" '
+        'viewBox="0 0 16 16" fill="none" stroke="currentColor" '
+        'stroke-width="1.5" stroke-linecap="round" '
+        'stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">'
+        '<path d="M13 9.5A5 5 0 0 1 6.5 3a5.5 5.5 0 1 0 6.5 6.5z"/>'
+        "</svg>"
+        '<svg class="clarion-theme-icon-light" width="16" height="16" '
+        'viewBox="0 0 16 16" fill="none" stroke="currentColor" '
+        'stroke-width="1.5" stroke-linecap="round" '
+        'stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">'
+        '<circle cx="8" cy="8" r="3"/>'
+        '<path d="M8 1v2M8 13v2M1 8h2M13 8h2'
+        "M3.05 3.05l1.4 1.4M11.55 11.55l1.4 1.4"
+        'M3.05 12.95l1.4-1.4M11.55 4.45l1.4-1.4"/>'
+        "</svg>"
+        "</button>"
+    )
     return (
         '<div class="clarion-brand-strip">'
         '<div class="clarion-brand-left">'
@@ -682,8 +706,117 @@ def brand_strip(
         '<div class="clarion-brand-right">'
         f'<span class="clarion-brand-version">v{_esc(version)}</span>'
         + status_badge(env_status, label=env.upper())
+        + theme_toggle
         + "</div>"
         "</div>"
+    )
+
+
+# ---------- Empty-state illustration ----------
+
+
+def empty_state(
+    *,
+    glyph: str = "data",
+    title: str,
+    detail: str = "",
+    hint: str = "",
+) -> str:
+    """Polished empty-state block with a small SVG illustration.
+
+    Replaces the plain "No data" copy that used to live inline in
+    each view. ``glyph`` picks an SVG vignette:
+
+      - "data"     : stacked rectangles (a "no records" file metaphor)
+      - "patient"  : circle + arc avatar silhouette
+      - "trace"    : zig-zag waveform on a baseline
+      - "donut"    : ring with a gap (matches the cost donut)
+    """
+    glyphs = {
+        "data": (
+            '<svg width="72" height="72" viewBox="0 0 72 72" '
+            'fill="none" xmlns="http://www.w3.org/2000/svg" '
+            'aria-hidden="true">'
+            '<rect x="18" y="20" width="36" height="6" rx="2" '
+            'fill="var(--c-bg-subtle)" stroke="var(--c-border)"/>'
+            '<rect x="18" y="32" width="36" height="6" rx="2" '
+            'fill="var(--c-bg-subtle)" stroke="var(--c-border)"/>'
+            '<rect x="18" y="44" width="22" height="6" rx="2" '
+            'fill="var(--c-bg-subtle)" stroke="var(--c-border)" '
+            'opacity="0.6"/>'
+            '<circle cx="56" cy="48" r="9" fill="none" '
+            'stroke="var(--c-accent)" stroke-width="2"/>'
+            '<path d="M62 54L67 59" stroke="var(--c-accent)" '
+            'stroke-width="2" stroke-linecap="round"/>'
+            "</svg>"
+        ),
+        "patient": (
+            '<svg width="72" height="72" viewBox="0 0 72 72" '
+            'fill="none" xmlns="http://www.w3.org/2000/svg" '
+            'aria-hidden="true">'
+            '<circle cx="36" cy="28" r="10" stroke="var(--c-border)" '
+            'fill="var(--c-bg-subtle)" stroke-width="2"/>'
+            '<path d="M16 58c0-11 9-18 20-18s20 7 20 18" '
+            'stroke="var(--c-border)" fill="var(--c-bg-subtle)" '
+            'stroke-width="2" stroke-linecap="round"/>'
+            '<circle cx="52" cy="20" r="5" fill="var(--c-accent)" '
+            'opacity="0.8"/>'
+            "</svg>"
+        ),
+        "trace": (
+            '<svg width="120" height="48" viewBox="0 0 120 48" '
+            'fill="none" xmlns="http://www.w3.org/2000/svg" '
+            'aria-hidden="true">'
+            '<line x1="4" y1="40" x2="116" y2="40" '
+            'stroke="var(--c-border)" stroke-width="1" '
+            'stroke-dasharray="2 3"/>'
+            '<polyline points="6,28 18,22 30,30 42,16 54,32 '
+            "66,18 78,26 90,14 102,28 114,22\" "
+            'stroke="var(--c-accent)" stroke-width="2" '
+            'stroke-linecap="round" stroke-linejoin="round" '
+            'fill="none" opacity="0.6"/>'
+            '<circle cx="42" cy="16" r="3" fill="var(--c-accent)" '
+            'opacity="0.7"/>'
+            '<circle cx="90" cy="14" r="3" fill="var(--c-accent)" '
+            'opacity="0.7"/>'
+            "</svg>"
+        ),
+        "donut": (
+            '<svg width="72" height="72" viewBox="0 0 72 72" '
+            'fill="none" xmlns="http://www.w3.org/2000/svg" '
+            'aria-hidden="true">'
+            '<circle cx="36" cy="36" r="22" stroke="var(--c-border)" '
+            'stroke-width="8" fill="none" stroke-dasharray="100 38" '
+            'transform="rotate(-90 36 36)"/>'
+            '<circle cx="36" cy="36" r="6" fill="var(--c-bg-subtle)"/>'
+            "</svg>"
+        ),
+    }
+    svg = glyphs.get(glyph, glyphs["data"])
+    detail_html = (
+        f'<div style="font-size: var(--fs-sm); color: var(--c-text-muted); '
+        f'max-width: 380px; text-align: center;">{_esc(detail)}</div>'
+        if detail
+        else ""
+    )
+    hint_html = (
+        f'<div style="font-family: var(--font-mono); font-size: var(--fs-xs); '
+        f"color: var(--c-text-muted); background: var(--c-bg-subtle); "
+        f"border: 1px solid var(--c-border); padding: 6px 10px; "
+        f'border-radius: var(--r-sm);">{_esc(hint)}</div>'
+        if hint
+        else ""
+    )
+    return (
+        '<div class="clarion-empty-state" '
+        'style="display: flex; flex-direction: column; align-items: center; '
+        'gap: 14px; padding: 36px 16px;">'
+        + svg
+        + f'<div style="font-size: var(--fs-lg); color: var(--c-text-strong); '
+        f'font-weight: var(--fw-semibold);">{_esc(title)}</div>'
+        + detail_html
+        + hint_html
+        + "</div>"
     )
 
 
@@ -696,6 +829,7 @@ __all__ = [
     "brand_strip",
     "cost_chip",
     "donut_chart",
+    "empty_state",
     "incident_row",
     "kpi_strip",
     "kpi_tile",
