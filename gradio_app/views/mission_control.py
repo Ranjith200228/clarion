@@ -46,8 +46,10 @@ def build_html(
             subtitle="Real-time health across every tenant",
         )
         + _kpi_strip(kpis)
+        + _comparative_strip(snapshots)
         + c.panel(title="Tenant Health", body_html=_tenant_table(snapshots))
         + '<div class="clarion-row" style="align-items: stretch; gap: 16px;">'
+        + _activity_feed_panel(escalations, emergencies)
         + _stream_panel(
             title="Recent Escalations",
             empty_message="No escalations on file yet.",
@@ -83,19 +85,14 @@ def empty_html() -> str:
     """No-data state. Surfaces when no tenant has produced any
     artifact yet (fresh deploy / first run).
     """
-    body = (
-        '<div class="clarion-stack" style="align-items: center; gap: 12px;">'
-        '<div style="font-size: var(--fs-lg); color: var(--c-text);">'
-        "No tenant data found."
-        "</div>"
-        '<div style="font-size: var(--fs-sm); color: var(--c-text-muted);">'
-        "Run the evaluation harness for at least one customer:"
-        "</div>"
-        '<div class="clarion-mono" style="padding: 12px 16px; '
-        'background: var(--c-bg-subtle); border-radius: var(--r-md);">'
-        "python -m clarion.evaluation.cli run all --out reports/"
-        "</div>"
-        "</div>"
+    body = c.empty_state(
+        glyph="data",
+        title="No tenant data found",
+        detail=(
+            "Mission Control aggregates per-tenant evaluation reports. "
+            "Run the harness for at least one customer to populate it."
+        ),
+        hint="python -m clarion.eval --customer all",
     )
     return (
         '<div class="clarion-stack" style="gap: 24px;">'
@@ -106,6 +103,177 @@ def empty_html() -> str:
         + c.panel(title="Awaiting Data", body_html=body)
         + "</div>"
     )
+
+
+# ---------- comparative tenant strip (Phase H9) ----------
+
+
+def _comparative_strip(snapshots: list[TenantSnapshot]) -> str:
+    """Side-by-side per-tenant metric comparison strip.
+
+    Two-column grid (or three on wider screens) of compact
+    tenant cards each showing the headline trio: trust, pass
+    rate, escalations. Lets a viewer read the multi-tenant
+    story without scrolling into the tenant table.
+    """
+    have_data = [s for s in snapshots if s.has_data]
+    if len(have_data) < 2:
+        return ""  # nothing to compare with fewer than 2 tenants
+    cards = "".join(_comparative_card(s) for s in have_data)
+    body = (
+        '<div style="display: grid; '
+        "grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); "
+        'gap: 12px;">' + cards + "</div>"
+    )
+    return c.panel(title="Tenant-by-Tenant Snapshot", body_html=body)
+
+
+def _comparative_card(snap: TenantSnapshot) -> str:
+    """One per-tenant comparison card. Renders trust / pass /
+    containment as a compact three-column metric row above the
+    tenant name."""
+    trust = snap.headline_score
+    pass_r = snap.pass_rate
+    containment = snap.containment_rate
+    status_dot_color = (
+        "var(--c-healthy)"
+        if trust >= 0.85
+        else "var(--c-warning)"
+        if trust >= 0.60
+        else "var(--c-critical)"
+    )
+    return (
+        '<div style="padding: 14px 16px; background: var(--c-bg-subtle); '
+        "border: 1px solid var(--c-border); border-radius: var(--r-md); "
+        'display: flex; flex-direction: column; gap: 10px;">'
+        # Header: status dot + display name.
+        '<div style="display: flex; align-items: center; gap: 8px;">'
+        f'<span style="width: 8px; height: 8px; border-radius: 50%; '
+        f'background: {status_dot_color};"></span>'
+        f'<span style="font-size: var(--fs-sm); color: var(--c-text-strong); '
+        f'font-weight: var(--fw-semibold);">{_esc(snap.display_name)}</span>'
+        '<span style="margin-left: auto; font-family: var(--font-mono); '
+        'font-size: 10px; color: var(--c-text-muted);">'
+        f"{_esc(snap.customer_id)}"
+        "</span>"
+        "</div>"
+        # Three-metric row.
+        '<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; '
+        'gap: 8px;">'
+        + _comparative_metric("TRUST", f"{trust:.2f}")
+        + _comparative_metric("PASS", _pct(pass_r))
+        + _comparative_metric("CONTAINED", _pct(containment))
+        + "</div>"
+        "</div>"
+    )
+
+
+def _comparative_metric(label: str, value: str) -> str:
+    return (
+        '<div style="display: flex; flex-direction: column; gap: 2px;">'
+        '<div style="font-size: 9px; color: var(--c-text-muted); '
+        "text-transform: uppercase; letter-spacing: 0.08em; "
+        f'font-weight: var(--fw-bold);">{_esc(label)}</div>'
+        '<div style="font-family: var(--font-mono); '
+        "font-size: var(--fs-sm); color: var(--c-text-strong); "
+        f'font-weight: var(--fw-semibold);">{_esc(value)}</div>'
+        "</div>"
+    )
+
+
+# ---------- live activity feed (Phase H9) ----------
+
+
+def _activity_feed_panel(
+    escalations: list[EscalationItem],
+    emergencies: list[EmergencyItem],
+) -> str:
+    """Combined chronological feed of recent activity.
+
+    Mixes escalations + emergencies into one timeline sorted by
+    timestamp (newest first). The view next to the dedicated
+    Escalation / Emergency streams reads as "live system pulse"
+    when scanning Mission Control.
+    """
+    events: list[tuple[object, str, str, str, str]] = []
+    for e in escalations:
+        events.append(
+            (e.detected_at, "escalation", e.severity, e.tenant, e.summary)
+        )
+    for em in emergencies:
+        events.append(
+            (em.detected_at, "emergency", "critical", em.tenant, em.summary)
+        )
+    if not events:
+        body = c.empty_state(
+            glyph="trace",
+            title="No activity yet",
+            detail="Run the harness to populate the live feed.",
+        )
+    else:
+        events.sort(key=lambda x: x[0], reverse=True)
+        rows = "".join(
+            _activity_row(ts, kind, severity, tenant, summary)
+            for ts, kind, severity, tenant, summary in events[:14]
+        )
+        body = (
+            '<div class="clarion-stack" style="gap: 6px;">' + rows + "</div>"
+        )
+    return (
+        '<div style="flex: 1 1 0; min-width: 0;">'
+        + c.panel(title="Live Activity Feed", body_html=body)
+        + "</div>"
+    )
+
+
+def _activity_row(
+    ts: object, kind: str, severity: str, tenant: str, summary: str
+) -> str:
+    """One row in the live feed: timestamp + kind chip + tenant
+    + summary. Severity colour-tints the left border."""
+    color = {
+        "critical": "var(--c-critical)",
+        "warning":  "var(--c-warning)",
+        "info":     "var(--c-accent)",
+        "healthy":  "var(--c-healthy)",
+    }.get(severity, "var(--c-text-muted)")
+    kind_chip = {
+        "escalation": "ESC",
+        "emergency":  "EMERG",
+        "booking":    "BOOK",
+        "note":       "NOTE",
+    }.get(kind, kind.upper()[:5])
+    when = ts.strftime("%H:%M:%S") if hasattr(ts, "strftime") else "—"
+    return (
+        '<div style="display: grid; '
+        "grid-template-columns: 56px 56px auto 1fr; gap: 8px; "
+        f"padding: 6px 10px; border-left: 3px solid {color}; "
+        "background: var(--c-bg-panel); border-radius: var(--r-sm); "
+        'align-items: center;">'
+        '<span style="font-family: var(--font-mono); font-size: 10px; '
+        'color: var(--c-text-muted);">'
+        f"{_esc(when)}"
+        "</span>"
+        '<span style="font-family: var(--font-mono); font-size: 9px; '
+        "padding: 1px 6px; border-radius: var(--r-sm); "
+        f"background: rgba(0,0,0,0.18); color: {color}; "
+        "text-transform: uppercase; letter-spacing: 0.06em; "
+        f'font-weight: var(--fw-bold);">{_esc(kind_chip)}</span>'
+        '<span style="font-size: var(--fs-xs); color: var(--c-accent); '
+        'font-family: var(--font-mono);">'
+        f"{_esc(tenant)}"
+        "</span>"
+        '<span style="font-size: var(--fs-xs); color: var(--c-text); '
+        'overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">'
+        f"{_esc(summary)}"
+        "</span>"
+        "</div>"
+    )
+
+
+def _esc(text: str) -> str:
+    import html as _html
+    return _html.escape(str(text), quote=True)
 
 
 # ---------- internals ----------

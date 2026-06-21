@@ -180,7 +180,12 @@ def test_mission_control_renders_emergency_items() -> None:
 def test_mission_control_empty_html_renders_cli_hint() -> None:
     html = mission_control.empty_html()
     assert "No tenant data found" in html
-    assert "python -m clarion.evaluation.cli" in html
+    # H8 swapped the inline mono div for the c.empty_state helper
+    # with a hint pill; the CLI invocation in the hint is the new
+    # canonical entrypoint that writes both report_ and trace_
+    # JSON files (vs the older `clarion.evaluation.cli` path
+    # which only wrote the metrics report).
+    assert "python -m clarion.eval" in html
 
 
 # ---------- Cost & SLO ----------
