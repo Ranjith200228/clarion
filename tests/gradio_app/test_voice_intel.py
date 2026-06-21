@@ -317,8 +317,10 @@ def test_view_frustration_chart_present_when_trace_exists() -> None:
     assert "<polyline" in html
     # Threshold hairline (dashed).
     assert 'stroke-dasharray="4 4"' in html
-    # 2 escalated markers expected.
-    assert html.count("<circle ") == 2
+    # 2 escalated markers expected. Use r="3" as the marker
+    # signature so we don't double-count the H5 emotion-donut
+    # segment circles which use larger radii + stroke-dasharray.
+    assert html.count('r="3"') == 2
 
 
 def test_view_pipeline_panel_lists_three_stages() -> None:

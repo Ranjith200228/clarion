@@ -149,11 +149,38 @@ _EMOTION_COLOR: dict[str, str] = {
 
 
 def _emotion_panel(emotions: list[EmotionTotal]) -> str:
+    """Emotion distribution panel.
+
+    Two visual layers stacked vertically:
+      1. A donut ring (H4 ``donut_chart``) gives the shape of the
+         distribution at a glance - readers should see "mostly
+         calm" or "leaning frustrated" without reading any number.
+      2. The existing horizontal bars stay below for absolute
+         counts + percentages. Some emotions tail to <1% and the
+         ring won't render those clearly; the bars still do.
+    """
     if all(e.count == 0 for e in emotions):
         body = _empty_message("No emotion samples in this corpus yet.")
     else:
+        total = sum(e.count for e in emotions)
+        ring = c.donut_chart(
+            segments=[
+                (e.emotion.title(), float(e.count),
+                 _EMOTION_COLOR.get(e.emotion, PALETTE["accent"]))
+                for e in emotions
+                if e.count > 0
+            ],
+            center_value=str(total),
+            center_label="Samples",
+            size=200,
+        )
         rows = "".join(_emotion_row(e) for e in emotions)
-        body = '<div class="clarion-stack" style="gap: 8px;">' + rows + "</div>"
+        body = (
+            '<div class="clarion-stack" style="gap: 16px;">'
+            + ring
+            + '<div class="clarion-stack" style="gap: 8px;">' + rows + "</div>"
+            + "</div>"
+        )
     return (
         '<div style="flex: 1 1 0; min-width: 0;">'
         + c.panel(title="Emotion Distribution", body_html=body)
