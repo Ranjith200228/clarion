@@ -22,12 +22,18 @@ this module never reads disk and never touches Gradio components.
 from __future__ import annotations
 
 import html as _html
+from datetime import UTC, datetime
 
 from gradio_app import components as c
 from gradio_app.data_sources import (
     Patient360Snapshot,
     PatientProfile,
     PatientTimelineEvent,
+)
+from gradio_app.views._confirmation import (
+    ConfirmationContext,
+    confirmation_data_uri,
+    default_instructions,
 )
 
 # ---------- public ----------
@@ -52,6 +58,7 @@ def build_html(snap: Patient360Snapshot) -> str:
         + _care_team_panel(selected)
         + _insurance_panel(selected)
         + "</div>"
+        + _confirmation_panel(selected, snap.customer_id)
         + _timeline_panel(selected)
         + "</div>"
     )
@@ -298,6 +305,148 @@ def _insurance_panel(p: PatientProfile) -> str:
         "</div>"
     )
     return c.panel(title="Insurance", body_html=body)
+
+
+def _confirmation_panel(p: PatientProfile, customer_id: str) -> str:
+    """Render a printable appointment-confirmation preview with
+    a download link.
+
+    Picks the patient's nearest *upcoming* appointment from
+    their timeline. If they have no upcoming appointment, the
+    panel renders a friendly empty state instead of vanishing -
+    a viewer should always see this section so the download
+    affordance is discoverable.
+    """
+    now = datetime.now(UTC)
+
+    # Prefer the nearest UPCOMING appointment, but fall back to
+    # the most recent past one so the download affordance always
+    # shows up when a patient has any appointment history. The
+    # confirmation document calls out past vs upcoming clearly
+    # so the UX still reads correctly either way.
+    upcoming: PatientTimelineEvent | None = None
+    most_recent_past: PatientTimelineEvent | None = None
+    for e in p.timeline:
+        if e.kind != "appointment":
+            continue
+        ts = e.ts if e.ts.tzinfo is not None else e.ts.replace(tzinfo=UTC)
+        if ts >= now:
+            if upcoming is None or ts < upcoming.ts:
+                upcoming = e
+        else:
+            if most_recent_past is None or ts > most_recent_past.ts:
+                most_recent_past = e
+    chosen = upcoming or most_recent_past
+    is_upcoming = chosen is not None and chosen is upcoming
+
+    if chosen is None:
+        body = (
+            '<div style="font-size: var(--fs-sm); color: var(--c-text-muted);">'
+            "No appointment on file for this patient — once one is "
+            "booked, a downloadable confirmation will appear here."
+            "</div>"
+        )
+        return c.panel(title="Appointment Confirmation", body_html=body)
+
+    upcoming = chosen  # rename for the rest of the function
+
+    # Parse appointment type + provider name from the timeline
+    # event's title/detail (set by data_sources._patient_360_from_store).
+    # Title shape: "Appointment booked: <type>"; detail shape:
+    # "<type> with <provider> — <notes>".
+    apt_type = upcoming.title.split(":", 1)[-1].strip() or "Appointment"
+    provider_name = ""
+    if " with " in upcoming.detail:
+        after = upcoming.detail.split(" with ", 1)[1]
+        provider_name = after.split(" — ", 1)[0].strip()
+    if not provider_name and p.care_team:
+        provider_name = p.care_team[0].name
+    if not provider_name:
+        provider_name = "Care team"
+
+    ctx = ConfirmationContext(
+        customer_display_name=customer_id.title() + " Practice",
+        customer_id=customer_id,
+        patient_id=p.patient_id,
+        patient_name=p.display_name,
+        patient_dob=p.dob_display,
+        patient_phone=p.phone_display,
+        patient_email=p.email,
+        patient_address=p.address,
+        patient_language=p.preferred_language,
+        payer=p.insurance.payer if p.insurance else "Self-pay",
+        plan=p.insurance.plan if p.insurance else "—",
+        member_id=p.insurance.member_id if p.insurance else "—",
+        eligibility_status=p.insurance.eligibility_status if p.insurance else "unknown",
+        provider_name=provider_name,
+        appointment_type=apt_type,
+        appointment_at=upcoming.ts,
+        duration_minutes=30,
+        appointment_id=f"appt_{p.patient_id}_{int(upcoming.ts.timestamp())}",
+        location=f"{customer_id.title()} Front Desk · Suite 200",
+        instructions=default_instructions(apt_type),
+        generated_at=now,
+    )
+
+    uri = confirmation_data_uri(ctx)
+    when = ctx.appointment_at.strftime("%a, %b %d %Y · %I:%M %p")
+    filename = (
+        f"confirmation_{p.patient_id}_"
+        f"{ctx.appointment_at.strftime('%Y%m%d')}.html"
+    )
+
+    body = (
+        '<div class="clarion-stack" style="gap: 14px;">'
+        # Compact preview card.
+        '<div style="display: grid; grid-template-columns: 1fr auto; '
+        "gap: 16px; align-items: center; padding: 14px 16px; "
+        "background: var(--c-bg-subtle); border: 1px solid var(--c-border); "
+        'border-radius: var(--r-md);">'
+        '<div class="clarion-stack" style="gap: 4px;">'
+        '<div style="font-size: 10px; color: var(--c-accent); '
+        "text-transform: uppercase; letter-spacing: 0.08em; "
+        f'font-weight: var(--fw-bold);">{"Next appointment" if is_upcoming else "Most recent appointment"}</div>'
+        f'<div style="font-size: var(--fs-lg); color: var(--c-text-strong); '
+        f'font-weight: var(--fw-semibold);">{_esc(apt_type)}</div>'
+        f'<div style="font-size: var(--fs-sm); color: var(--c-text);">'
+        f"{_esc(when)} · with {_esc(provider_name)}"
+        "</div>"
+        f'<div style="font-size: var(--fs-xs); color: var(--c-text-muted);">'
+        f"{_esc(ctx.location)}"
+        "</div>"
+        "</div>"
+        # Download link styled as a button.
+        '<a href="' + uri + '" '
+        f'download="{filename}" '
+        'style="display: inline-flex; align-items: center; gap: 8px; '
+        "padding: 10px 16px; border-radius: var(--r-md); "
+        "background: var(--c-accent); color: white; "
+        "text-decoration: none; font-size: var(--fs-sm); "
+        "font-weight: var(--fw-semibold); white-space: nowrap; "
+        'box-shadow: 0 1px 0 rgba(255,255,255,0.10) inset;">'
+        # Download icon (inline SVG).
+        '<svg width="14" height="14" viewBox="0 0 16 16" '
+        'xmlns="http://www.w3.org/2000/svg" fill="none" '
+        'stroke="currentColor" stroke-width="1.75" '
+        'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        '<path d="M8 2v9"/>'
+        '<path d="M4 7l4 4 4-4"/>'
+        '<path d="M2 14h12"/>'
+        "</svg>"
+        "Download confirmation"
+        "</a>"
+        "</div>"
+        # Notice strip beneath the card.
+        '<div style="font-size: var(--fs-xs); color: var(--c-text-muted); '
+        'line-height: 1.5;">'
+        "The downloaded HTML file is fully self-contained — open it in any "
+        "browser to view, print, or attach to a patient record. Includes "
+        "the patient profile, provider, time/location, insurance details, "
+        "and appointment-specific prep instructions."
+        "</div>"
+        "</div>"
+    )
+    return c.panel(title="Appointment Confirmation", body_html=body)
 
 
 def _timeline_panel(p: PatientProfile) -> str:
