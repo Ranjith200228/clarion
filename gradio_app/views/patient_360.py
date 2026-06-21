@@ -106,11 +106,85 @@ def _picker(
     patients: tuple[PatientProfile, ...],
     selected: PatientProfile,
 ) -> str:
+    """Roster picker with H10 client-side search + payer filter.
+
+    Each chip carries data-name / data-payer / data-risk attributes
+    the inline JS handler reads to toggle ``display: none``. The
+    counter at the right of the filter bar updates live.
+
+    All JS is inline + scoped via the wrapping element id so it
+    doesn't conflict with anything else on the page; no script
+    elsewhere in the app reads or writes the same handles.
+    """
     chips = "".join(_chip(p, p.patient_id == selected.patient_id) for p in patients)
+    payers = sorted({
+        p.insurance.payer for p in patients if p.insurance is not None
+    })
+    payer_options = "".join(
+        f'<option value="{_esc(payer)}">{_esc(payer)}</option>'
+        for payer in payers
+    )
+    total = len(patients)
+    # Inline JS: read input + select, toggle chip visibility, update
+    # counter. Scoped by container id so it stays self-contained.
+    js = (
+        "(function(){"
+        "var box = document.getElementById('clarion-p360-roster');"
+        "if(!box) return;"
+        "var q = (box.querySelector('.clarion-p360-search') || {}).value;"
+        "var payer = (box.querySelector('.clarion-p360-payer') || {}).value;"
+        "q = (q || '').toLowerCase().trim();"
+        "var chips = box.querySelectorAll('.clarion-p360-chip');"
+        "var shown = 0;"
+        "chips.forEach(function(c){"
+        "  var name = (c.dataset.name || '').toLowerCase();"
+        "  var pid = (c.dataset.pid || '').toLowerCase();"
+        "  var p = c.dataset.payer || '';"
+        "  var matchQ = !q || name.indexOf(q) > -1 || pid.indexOf(q) > -1;"
+        "  var matchPayer = !payer || p === payer;"
+        "  var show = matchQ && matchPayer;"
+        "  c.style.display = show ? '' : 'none';"
+        "  if(show) shown++;"
+        "});"
+        "var counter = box.querySelector('.clarion-p360-counter');"
+        f"if(counter) counter.textContent = shown + ' of {total}';"
+        "})()"
+    )
     return (
+        '<div id="clarion-p360-roster" class="clarion-stack" '
+        'style="gap: 10px;">'
+        # Filter bar.
+        '<div style="display: flex; flex-wrap: wrap; align-items: center; '
+        'gap: 10px;">'
+        '<input class="clarion-p360-search" type="search" '
+        'placeholder="Search by name or patient id..." '
+        f'oninput="{js}" '
+        'style="flex: 1 1 220px; min-width: 200px; padding: 8px 12px; '
+        "border-radius: var(--r-md); border: 1px solid var(--c-border); "
+        "background: var(--c-bg-panel); color: var(--c-text-strong); "
+        'font-size: var(--fs-sm);">'
+        '<select class="clarion-p360-payer" '
+        f'onchange="{js}" '
+        'style="padding: 8px 12px; border-radius: var(--r-md); '
+        "border: 1px solid var(--c-border); "
+        "background: var(--c-bg-panel); color: var(--c-text); "
+        'font-size: var(--fs-sm);">'
+        '<option value="">All payers</option>'
+        + payer_options
+        + "</select>"
+        '<span class="clarion-p360-counter" '
+        'style="font-family: var(--font-mono); font-size: var(--fs-xs); '
+        "color: var(--c-text-muted); padding: 4px 10px; "
+        "background: var(--c-bg-subtle); border-radius: var(--r-sm); "
+        'white-space: nowrap;">'
+        f"{total} of {total}"
+        "</span>"
+        "</div>"
+        # Chip strip.
         '<div style="display: flex; flex-wrap: wrap; gap: 8px;">'
         + chips
         + "</div>"
+        "</div>"
     )
 
 
@@ -119,8 +193,21 @@ def _chip(p: PatientProfile, is_selected: bool) -> str:
     border = "var(--c-accent)" if is_selected else "var(--c-border)"
     color = "var(--c-accent)" if is_selected else "var(--c-text)"
     weight = "var(--fw-semibold)" if is_selected else "var(--fw-medium)"
+    payer = p.insurance.payer if p.insurance is not None else ""
+    risk_band = (
+        "high"
+        if p.trust_score < 0.5
+        else "medium"
+        if p.trust_score < 0.75
+        else "low"
+    )
     return (
-        f'<div style="display: inline-flex; align-items: center; gap: 8px; '
+        '<div class="clarion-p360-chip" '
+        f'data-name="{_esc(p.display_name)}" '
+        f'data-pid="{_esc(p.patient_id)}" '
+        f'data-payer="{_esc(payer)}" '
+        f'data-risk="{risk_band}" '
+        f'style="display: inline-flex; align-items: center; gap: 8px; '
         f"padding: 6px 12px; border-radius: 999px; "
         f"background: {bg}; border: 1px solid {border}; "
         f'color: {color}; font-size: var(--fs-sm); font-weight: {weight};">'
