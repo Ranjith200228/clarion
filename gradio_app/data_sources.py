@@ -2263,14 +2263,24 @@ def build_patient_360(
     customer_id: str,
     *,
     selected_patient_id: str | None = None,
+    data_dir: Path | None = None,
 ) -> Patient360Snapshot:
     """Build a Patient360Snapshot for one tenant.
 
-    Currently uses synthetic patients. A future task can switch
-    this to read from `data/<tenant>/patients.sqlite` (or wherever
-    the M1 PMS writeback lands long-form patient records).
+    Reads from ``data/<tenant>/structured.sqlite`` when present -
+    appointments, providers, eligibility, PMS tasks - and assembles
+    a per-patient profile, care team, insurance record, and a
+    timeline of touchpoints. Falls back to the synthetic roster
+    when the store is missing or has no patient rows.
+
+    Cosmetic fields (display name, DOB, phone, email, address)
+    are not stored in structured.sqlite by design (no PHI); they
+    are synthesised deterministically per ``patient_id`` so the
+    same patient looks identical across renders.
     """
-    patients = _synthetic_patient_360(customer_id)
+    patients = _patient_360_from_store(customer_id, data_dir=data_dir)
+    if not patients:
+        patients = _synthetic_patient_360(customer_id)
     selected: PatientProfile | None = None
     if selected_patient_id is not None:
         for p in patients:
@@ -2285,6 +2295,333 @@ def build_patient_360(
         patients=patients,
         selected=selected,
     )
+
+
+# ---------- Real-store Patient 360 ----------
+
+
+# Stable per-tenant pools of plausible cosmetic fields. The patient
+# id hash picks a deterministic index into each pool so a given
+# patient_id always renders the same name/phone/dob across runs.
+_PATIENT_NAME_POOL = (
+    "Avery Sinclair",
+    "Mira Khoury",
+    "Theo Brennan",
+    "Dana Whitfield",
+    "Jordan Reyes",
+    "Priya Ramachandran",
+    "Marcus Yamamoto",
+    "Elena Vasquez",
+    "Sasha Petrova",
+    "Idris Okonkwo",
+    "Lin Hwang",
+    "Camille Ortega",
+)
+_LANG_POOL = ("en", "en", "en", "es", "en", "en", "ja", "es", "ru", "en", "zh", "es")
+_AREA_CODE_POOL = ("415", "206", "718", "312", "404", "617", "503", "713")
+_STREET_POOL = (
+    "118 Pine St",
+    "2400 Westlake Ave N",
+    "900 Folsom St",
+    "221 Townsend St",
+    "642 King St",
+    "1200 Market Square",
+    "55 Beach Lane",
+    "880 Bryant St",
+)
+_CITY_POOL = (
+    ("Seattle", "WA", "98101"),
+    ("San Francisco", "CA", "94107"),
+    ("Brooklyn", "NY", "11201"),
+    ("Chicago", "IL", "60601"),
+    ("Atlanta", "GA", "30303"),
+    ("Boston", "MA", "02108"),
+    ("Portland", "OR", "97201"),
+    ("Houston", "TX", "77002"),
+)
+
+
+def _patient_cosmetics(
+    patient_id: str,
+) -> tuple[str, str, int, str, str, str, str]:
+    """Return ``(display_name, dob_display, age_years, phone, email,
+    address, lang)`` for a patient_id - deterministic via SHA-1."""
+    import hashlib
+
+    h = hashlib.sha1(patient_id.encode("utf-8")).hexdigest()
+    # Use successive hex chunks as independent draws so neighbouring
+    # patient IDs land in different name/phone/city buckets.
+    n_idx = int(h[0:4], 16) % len(_PATIENT_NAME_POOL)
+    lang_idx = int(h[4:8], 16) % len(_LANG_POOL)
+    phone_idx = int(h[8:12], 16) % len(_AREA_CODE_POOL)
+    street_idx = int(h[12:16], 16) % len(_STREET_POOL)
+    city_idx = int(h[16:20], 16) % len(_CITY_POOL)
+    age_seed = int(h[20:24], 16) % 60  # 0-59
+    age = 25 + age_seed
+    dob_year = datetime.now(UTC).year - age
+    dob_month = (int(h[24:26], 16) % 12) + 1
+    dob_day = (int(h[26:28], 16) % 27) + 1
+    dob_display = f"{dob_year:04d}-{dob_month:02d}-{dob_day:02d}"
+    name = _PATIENT_NAME_POOL[n_idx]
+    lang = _LANG_POOL[lang_idx]
+    area = _AREA_CODE_POOL[phone_idx]
+    phone_local = f"{int(h[28:31], 16) % 1000:03d}-{int(h[31:35], 16) % 10000:04d}"
+    phone = f"({area}) {phone_local}"
+    first = name.split()[0].lower()
+    email = f"{first}.{patient_id[-3:]}@example.invalid"
+    street = _STREET_POOL[street_idx]
+    city, state, zipc = _CITY_POOL[city_idx]
+    address = f"{street}, {city}, {state} {zipc}"
+    return name, dob_display, age, phone, email, address, lang
+
+
+def _scored_eng(patient_id: str, base: float = 0.6) -> float:
+    """Stable per-patient engagement / sentiment / trust scores
+    in [0.3, 0.97]. SHA-1 keeps the same patient anchored at the
+    same scores between renders."""
+    import hashlib
+
+    h = hashlib.sha1(patient_id.encode("utf-8")).hexdigest()
+    bump = int(h[0:6], 16) % 35 / 100.0  # 0.00 to 0.34
+    raw = base + bump
+    return max(0.30, min(0.97, raw))
+
+
+def _patient_360_from_store(
+    customer_id: str,
+    *,
+    data_dir: Path | None = None,
+) -> tuple[PatientProfile, ...]:
+    """Open the per-tenant SQLite structured store and assemble
+    ``PatientProfile`` records. Returns an empty tuple if the
+    store is missing or has no patient rows (the caller then
+    falls back to the synthetic roster).
+    """
+    base = (
+        data_dir if data_dir is not None else Path(__file__).parent.parent / "data"
+    )
+    db_path = base / customer_id / "structured.sqlite"
+    if not db_path.is_file():
+        return ()
+
+    import sqlite3
+
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    except sqlite3.OperationalError:
+        return ()
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = conn.cursor()
+
+        # Distinct patient IDs across all three patient-bearing tables.
+        cur.execute(
+            "SELECT DISTINCT patient_id FROM appointments "
+            "WHERE patient_id IS NOT NULL "
+            "UNION SELECT DISTINCT patient_id FROM eligibility "
+            "WHERE patient_id IS NOT NULL "
+            "UNION SELECT DISTINCT patient_id FROM pms_tasks "
+            "WHERE patient_id IS NOT NULL "
+            "ORDER BY patient_id"
+        )
+        patient_ids = [r["patient_id"] for r in cur.fetchall()]
+        if not patient_ids:
+            return ()
+
+        # Pre-load lookups for joining.
+        provider_lookup: dict[str, str] = {
+            r["provider_id"]: r["full_name"]
+            for r in cur.execute(
+                "SELECT provider_id, full_name FROM providers"
+            ).fetchall()
+        }
+
+        profiles: list[PatientProfile] = []
+        for pid in patient_ids:
+            (
+                name,
+                dob_display,
+                age,
+                phone,
+                email,
+                address,
+                lang,
+            ) = _patient_cosmetics(pid)
+
+            # ----- Appointments -----
+            appts = cur.execute(
+                "SELECT appointment_id, slot_id, appointment_type, "
+                "starts_at, status, provider_id, notes "
+                "FROM appointments WHERE patient_id = ? "
+                "ORDER BY starts_at DESC LIMIT 10",
+                (pid,),
+            ).fetchall()
+
+            # ----- Eligibility -----
+            elig_row = cur.execute(
+                "SELECT payer, plan_name, member_id, status, "
+                "effective_date FROM eligibility WHERE patient_id = ? "
+                "LIMIT 1",
+                (pid,),
+            ).fetchone()
+
+            # ----- PMS tasks (latest few) -----
+            tasks = cur.execute(
+                "SELECT task_id, subject, priority, status, created_at "
+                "FROM pms_tasks WHERE patient_id = ? "
+                "ORDER BY created_at DESC LIMIT 5",
+                (pid,),
+            ).fetchall()
+
+            # ----- Care team: providers who saw this patient -----
+            seen_provider_ids: list[str] = []
+            for r in appts:
+                rpid = r["provider_id"]
+                if rpid and rpid not in seen_provider_ids:
+                    seen_provider_ids.append(rpid)
+            care_team = tuple(
+                PatientCareTeamMember(
+                    name=provider_lookup.get(pp, pp),
+                    role="Primary Provider" if i == 0 else "Provider",
+                    is_primary=(i == 0),
+                )
+                for i, pp in enumerate(seen_provider_ids)
+            )
+
+            # ----- Insurance -----
+            insurance: PatientInsurance | None = None
+            if elig_row is not None:
+                status_raw = (elig_row["status"] or "unknown").lower()
+                if status_raw in ("active",):
+                    elig_status: Literal[
+                        "active", "pending", "lapsed", "unknown"
+                    ] = "active"
+                elif status_raw in ("pending",):
+                    elig_status = "pending"
+                elif status_raw in ("inactive", "lapsed", "terminated"):
+                    elig_status = "lapsed"
+                else:
+                    elig_status = "unknown"
+                last_verified: datetime | None = None
+                if elig_row["effective_date"]:
+                    try:
+                        last_verified = datetime.fromisoformat(
+                            str(elig_row["effective_date"])
+                        ).replace(tzinfo=UTC)
+                    except ValueError:
+                        last_verified = None
+                insurance = PatientInsurance(
+                    payer=elig_row["payer"] or "Unknown payer",
+                    member_id=elig_row["member_id"] or "—",
+                    plan=elig_row["plan_name"] or "—",
+                    eligibility_status=elig_status,
+                    last_verified_at=last_verified,
+                )
+
+            # ----- Timeline (appointments + tasks, merged + sorted) -----
+            timeline_events: list[PatientTimelineEvent] = []
+            for r in appts:
+                try:
+                    ts = datetime.fromisoformat(str(r["starts_at"]))
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=UTC)
+                except ValueError:
+                    continue
+                provider_name = provider_lookup.get(
+                    r["provider_id"], r["provider_id"] or "Unassigned"
+                )
+                status_str = str(r["status"] or "").lower()
+                severity: Literal[
+                    "healthy", "info", "warning", "critical"
+                ] = (
+                    "healthy"
+                    if status_str == "booked"
+                    else "info"
+                    if status_str in ("completed", "checked_in")
+                    else "warning"
+                )
+                detail = f"{r['appointment_type']} with {provider_name}"
+                if r["notes"]:
+                    detail += f" — {r['notes']}"
+                timeline_events.append(
+                    PatientTimelineEvent(
+                        ts=ts,
+                        kind="appointment",
+                        title=(
+                            f"Appointment {status_str or 'booked'}: "
+                            f"{r['appointment_type']}"
+                        ),
+                        detail=detail,
+                        severity=severity,
+                    )
+                )
+            for r in tasks:
+                try:
+                    ts = datetime.fromisoformat(str(r["created_at"]))
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=UTC)
+                except ValueError:
+                    continue
+                pri = str(r["priority"] or "").lower()
+                if pri in ("urgent", "high"):
+                    severity = "critical" if pri == "urgent" else "warning"
+                else:
+                    severity = "info"
+                timeline_events.append(
+                    PatientTimelineEvent(
+                        ts=ts,
+                        kind="pms_task",
+                        title=f"PMS task: {r['subject']}",
+                        detail=(
+                            f"Priority {pri or 'normal'} · "
+                            f"status {r['status'] or 'open'!s}"
+                        ),
+                        severity=severity,
+                    )
+                )
+            # Add an eligibility-verified event when we have one.
+            if insurance is not None and insurance.last_verified_at is not None:
+                timeline_events.append(
+                    PatientTimelineEvent(
+                        ts=insurance.last_verified_at,
+                        kind="eligibility",
+                        title="Eligibility verified",
+                        detail=(
+                            f"{insurance.payer} {insurance.plan} · "
+                            f"status {insurance.eligibility_status}"
+                        ),
+                        severity=(
+                            "healthy"
+                            if insurance.eligibility_status == "active"
+                            else "warning"
+                        ),
+                    )
+                )
+
+            timeline_events.sort(key=lambda e: e.ts, reverse=True)
+
+            profiles.append(
+                PatientProfile(
+                    patient_id=pid,
+                    display_name=name,
+                    dob_display=dob_display,
+                    age_years=age,
+                    phone_display=phone,
+                    email=email,
+                    address=address,
+                    preferred_language=lang,
+                    customer_id=customer_id,
+                    engagement_score=_scored_eng(pid + ":eng", base=0.55),
+                    sentiment_score=_scored_eng(pid + ":sen", base=0.50),
+                    trust_score=_scored_eng(pid + ":trust", base=0.75),
+                    care_team=care_team,
+                    insurance=insurance,
+                    timeline=tuple(timeline_events[:15]),
+                )
+            )
+        return tuple(profiles)
+    finally:
+        conn.close()
 
 
 # ============================================================
