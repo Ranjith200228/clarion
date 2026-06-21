@@ -194,13 +194,46 @@ def build_app() -> gr.Blocks:
             cfg_html,
         ]
 
-        # Switcher change fans out to every customer-bound view.
+        # The eight HTML output slots get skeletoned during the
+        # customer switch (state slots stay untouched so live /
+        # voice agent context isn't disturbed mid-render).
+        html_outputs = [
+            mc_html, so_html, af_html, vi_html, ho_html,
+            p360_html, cs_html, cfg_html,
+        ]
+
+        def show_skeletons():  # type: ignore[no-untyped-def]
+            """Paint skeleton placeholders into every HTML slot
+            so the user gets immediate feedback when they pick a
+            new customer. `.then(refresh_all)` runs right after
+            to replace these with real data."""
+            return tuple(
+                _skeleton_view(label)
+                for label in (
+                    "Mission Control",
+                    "Sentinel Ops",
+                    "Agent Flow",
+                    "Voice Intelligence",
+                    "Healthcare Ops",
+                    "Patient 360",
+                    "Cost & SLO",
+                    "Configuration",
+                )
+            )
+
+        # Switcher change paints skeletons first, then fans out
+        # to the real refresh.
         customer_dd.change(
+            fn=show_skeletons,
+            outputs=html_outputs,
+        ).then(
             fn=refresh_all,
             inputs=[customer_dd, live.state, voice.state],
             outputs=outputs,
         )
-        # Initial population on app load.
+        # Initial population on app load - no skeleton flash here
+        # because the first paint is already the empty html_outputs
+        # default; refresh_all writes the real data on top.
         demo.load(
             fn=refresh_all,
             inputs=[customer_dd, live.state, voice.state],
@@ -307,6 +340,46 @@ def _render_configuration(customer_id: str) -> str:
     helper is a thin pass-through.
     """
     return configuration.build_html(customer_id)
+
+
+def _skeleton_view(label: str) -> str:
+    """Return a skeleton placeholder for one tab during customer
+    switch. Cheap to render (pure HTML, no I/O) so the swap is
+    near-instant; the `.clarion-skeleton` shimmer animation
+    keeps the user oriented while refresh_all finishes.
+
+    The shape roughly tracks a typical view: title + subtitle,
+    KPI strip of 4 tiles, then a two-up panel row.
+    """
+    tile = (
+        '<div class="clarion-skeleton clarion-skeleton-block" '
+        'style="flex: 1 1 0; min-width: 120px; height: 96px;"></div>'
+    )
+    big_panel = (
+        '<div class="clarion-skeleton clarion-skeleton-block" '
+        'style="flex: 1 1 0; min-width: 0; height: 220px; '
+        'border-radius: var(--r-lg);"></div>'
+    )
+    return (
+        '<div class="clarion-stack" style="gap: 20px;">'
+        # Title + subtitle pair.
+        '<div class="clarion-stack" style="gap: 8px;">'
+        '<div class="clarion-skeleton" '
+        f'style="height: 22px; width: 280px;" aria-label="Loading {_html.escape(label, quote=True)}"></div>'
+        '<div class="clarion-skeleton" '
+        'style="height: 12px; width: 360px;"></div>'
+        "</div>"
+        # KPI strip (4 tiles).
+        '<div class="clarion-row" style="gap: 12px; flex-wrap: wrap;">'
+        + (tile * 4)
+        + "</div>"
+        # Two big panels side by side.
+        '<div class="clarion-row" style="gap: 16px;">'
+        + big_panel
+        + big_panel
+        + "</div>"
+        "</div>"
+    )
 
 
 def _render_footer(*, version: str) -> str:
