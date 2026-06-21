@@ -47,6 +47,7 @@ from gradio_app import (
 from gradio_app.theme import CLARION_THEME, CSS
 from gradio_app.views import (
     agent_flow,
+    configuration,
     cost_slo,
     healthcare_ops,
     mission_control,
@@ -142,6 +143,8 @@ def build_app() -> gr.Blocks:
             # ---- PLATFORM section ----
             with gr.Tab("System Health"):
                 gr.HTML(_render_system_health())
+            with gr.Tab("Configuration"):
+                cfg_html = gr.HTML(_render_configuration(default_customer))
 
         # ---------- Footer strip ----------
         gr.HTML(_render_footer(version=version))
@@ -171,8 +174,12 @@ def build_app() -> gr.Blocks:
             ho = _render_healthcare_ops(customer_id)
             p360 = _render_patient_360(customer_id)
             cs = _render_cost_slo()
+            cfg = _render_configuration(customer_id)
             new_live_state = tab_live_agent.set_customer(live_state, customer_id)
-            return (mc, so, af, vi, ho, p360, new_live_state, new_voice_state, cs)
+            return (
+                mc, so, af, vi, ho, p360,
+                new_live_state, new_voice_state, cs, cfg,
+            )
 
         outputs = [
             mc_html,
@@ -184,6 +191,7 @@ def build_app() -> gr.Blocks:
             live.state,
             voice.state,
             cs_html,
+            cfg_html,
         ]
 
         # Switcher change fans out to every customer-bound view.
@@ -288,6 +296,17 @@ def _render_system_health() -> str:
     subsystem status without restarting the app.
     """
     return system_health.build_html(data_sources.build_system_health())
+
+
+def _render_configuration(customer_id: str) -> str:
+    """Build the Configuration HTML for one tenant.
+
+    Reads the tenant's YAML config directly via
+    ``clarion.config.loader.load_customer`` and renders it. The
+    view module handles the empty / load-error state, so this
+    helper is a thin pass-through.
+    """
+    return configuration.build_html(customer_id)
 
 
 def _render_footer(*, version: str) -> str:
