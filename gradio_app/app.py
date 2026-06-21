@@ -223,13 +223,28 @@ def build_app() -> gr.Blocks:
 
         # Switcher change paints skeletons first, then fans out
         # to the real refresh.
+        #
+        # Two Gradio knobs matter here:
+        #   queue=False on the skeleton step    - run immediately
+        #                                          on the UI thread,
+        #                                          don't sit in the
+        #                                          request queue.
+        #   show_progress="hidden" on both       - skip the default
+        #                                          progress overlay
+        #                                          which would paint
+        #                                          over the skeleton.
+        # Without these two, Gradio coalesces the two updates and
+        # the user only sees the final state - no visible skeleton.
         customer_dd.change(
             fn=show_skeletons,
             outputs=html_outputs,
+            queue=False,
+            show_progress="hidden",
         ).then(
             fn=refresh_all,
             inputs=[customer_dd, live.state, voice.state],
             outputs=outputs,
+            show_progress="hidden",
         )
         # Initial population on app load - no skeleton flash here
         # because the first paint is already the empty html_outputs
