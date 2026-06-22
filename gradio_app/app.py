@@ -87,7 +87,59 @@ def build_app() -> gr.Blocks:
     default_customer = customers[0]
     version = _resolve_version()
 
-    with gr.Blocks(title=TITLE, theme=CLARION_THEME, css=CSS) as demo:
+    # Voice Intelligence skeleton-on-switch: inject a vanilla <script>
+    # into <head> via Gradio's head= passthrough. This bypasses both
+    # the gr.HTML sanitizer (strips <script>) and the js= event hook
+    # (which silently failed to fire in 4.44). The handler polls for
+    # the customer dropdown + #clarion-vi-canvas to appear, then on
+    # change it swaps the canvas content for a shimmer block. When
+    # refresh_all returns the real HTML, Gradio overwrites the
+    # placeholder via its normal output diff.
+    skeleton_head = """
+<script>
+(function () {
+  function init() {
+    var dd = document.querySelector('.gradio-container select');
+    var vi = document.getElementById('clarion-vi-canvas');
+    if (!dd || !vi) { setTimeout(init, 400); return; }
+    if (dd.__clarionViArmed) { return; }
+    dd.__clarionViArmed = true;
+    var SKEL = '<div class=\"clarion-stack\" style=\"gap:20px;\">'
+      + '<div class=\"clarion-stack\" style=\"gap:8px;\">'
+      + '<div class=\"clarion-skeleton\" style=\"height:22px;width:280px;\"></div>'
+      + '<div class=\"clarion-skeleton\" style=\"height:12px;width:360px;\"></div>'
+      + '</div>'
+      + '<div class=\"clarion-row\" style=\"gap:12px;flex-wrap:wrap;\">'
+      + '<div class=\"clarion-skeleton clarion-skeleton-block\" style=\"flex:1 1 0;min-width:120px;height:96px;\"></div>'
+      + '<div class=\"clarion-skeleton clarion-skeleton-block\" style=\"flex:1 1 0;min-width:120px;height:96px;\"></div>'
+      + '<div class=\"clarion-skeleton clarion-skeleton-block\" style=\"flex:1 1 0;min-width:120px;height:96px;\"></div>'
+      + '<div class=\"clarion-skeleton clarion-skeleton-block\" style=\"flex:1 1 0;min-width:120px;height:96px;\"></div>'
+      + '</div>'
+      + '<div class=\"clarion-row\" style=\"gap:16px;\">'
+      + '<div class=\"clarion-skeleton clarion-skeleton-block\" style=\"flex:1 1 0;min-width:0;height:220px;border-radius:12px;\"></div>'
+      + '<div class=\"clarion-skeleton clarion-skeleton-block\" style=\"flex:1 1 0;min-width:0;height:220px;border-radius:12px;\"></div>'
+      + '</div>'
+      + '</div>';
+    dd.addEventListener('change', function () {
+      var target = document.getElementById('clarion-vi-canvas');
+      if (target) { target.innerHTML = SKEL; }
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+""".strip()
+
+    with gr.Blocks(
+        title=TITLE,
+        theme=CLARION_THEME,
+        css=CSS,
+        head=skeleton_head,
+    ) as demo:
         # ---------- Top strip ----------
         # The brand strip never rebuilds — it's static chrome.
         gr.HTML(
@@ -197,27 +249,16 @@ def build_app() -> gr.Blocks:
             cfg_html,
         ]
 
-        # Skeleton-on-switch is implemented in pure JS (via the
-        # `js=` param on the change handler). The JS runs
-        # synchronously in the browser BEFORE the Python callback
-        # fires, paints the .clarion-skeleton blocks into every
-        # gr.HTML view container, then refresh_all returns real
-        # data and Gradio swaps it in. This sidesteps Gradio's
-        # event-queue coalescing - the user always sees the
-        # shimmer for the duration of the round-trip.
+        # Voice Intelligence skeleton: the head= script (see
+        # skeleton_head above) listens on the dropdown's change
+        # event and paints a shimmer into #clarion-vi-canvas
+        # synchronously, before this Python callback round-trips.
         customer_dd.change(
             fn=refresh_all,
             inputs=[customer_dd, live.state, voice.state],
             outputs=outputs,
         )
 
-        # (Voice Intelligence skeleton is armed via the
-        # page_load_js passed to gr.Blocks above - see top of
-        # build_app. Gradio strips <script> tags from gr.HTML in
-        # 4.44 so we can't inject the listener that way.)
-        # Initial population on app load - no skeleton flash here
-        # because the first paint is already the empty html_outputs
-        # default; refresh_all writes the real data on top.
         demo.load(
             fn=refresh_all,
             inputs=[customer_dd, live.state, voice.state],
