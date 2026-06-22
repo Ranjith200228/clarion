@@ -127,7 +127,10 @@ def build_app() -> gr.Blocks:
             with gr.Tab("Agent Flow"):
                 af_html = gr.HTML(_render_agent_flow(default_customer))
             with gr.Tab("Voice Intelligence"):
-                vi_html = gr.HTML(_render_voice_intel(default_customer))
+                vi_html = gr.HTML(
+                    _render_voice_intel(default_customer),
+                    elem_id="clarion-vi-canvas",
+                )
             with gr.Tab("Patient 360"):
                 p360_html = gr.HTML(_render_patient_360(default_customer))
             with gr.Tab("Cost & SLO"):
@@ -203,18 +206,41 @@ def build_app() -> gr.Blocks:
         # event-queue coalescing - the user always sees the
         # shimmer for the duration of the round-trip.
         # Customer switch fans out to every customer-bound view.
-        # The JS-skeleton attempts (H11.2 .then() chain + the
-        # js= injection) caused intermittent blank-canvas bugs
-        # on this Gradio 4.44 version - either refresh_all
-        # crashed silently from input misalignment or the JS
-        # ran during page-load validation in a way that broke
-        # later tab content. The fade-in animation on every
-        # .clarion-stack already provides a "data arriving" cue
-        # without a separate skeleton phase.
+        # Scoped JS skeleton: only paints over Voice Intelligence
+        # (via #clarion-vi-canvas elem_id). If the JS errors, only
+        # that one tab is affected; everything else still works.
+        # The function MUST take the inputs and return them
+        # unchanged so refresh_all gets the right args.
+        vi_skeleton_js = """
+(customer_id, live_state, voice_state) => {
+    const skel = `
+      <div class="clarion-stack" style="gap: 20px;">
+        <div class="clarion-stack" style="gap: 8px;">
+          <div class="clarion-skeleton" style="height: 24px; width: 220px;"></div>
+          <div class="clarion-skeleton" style="height: 12px; width: 340px;"></div>
+        </div>
+        <div class="clarion-row" style="gap: 12px; flex-wrap: wrap;">
+          <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:140px;height:104px;"></div>
+          <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:140px;height:104px;"></div>
+          <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:140px;height:104px;"></div>
+          <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:140px;height:104px;"></div>
+        </div>
+        <div class="clarion-row" style="gap: 16px;">
+          <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:0;height:260px;border-radius:var(--r-lg);"></div>
+          <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:0;height:260px;border-radius:var(--r-lg);"></div>
+        </div>
+      </div>`;
+    const vi = document.getElementById('clarion-vi-canvas');
+    if (vi) { vi.innerHTML = skel; }
+    return [customer_id, live_state, voice_state];
+}
+"""
+
         customer_dd.change(
             fn=refresh_all,
             inputs=[customer_dd, live.state, voice.state],
             outputs=outputs,
+            js=vi_skeleton_js,
         )
         # Initial population on app load - no skeleton flash here
         # because the first paint is already the empty html_outputs
