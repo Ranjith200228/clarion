@@ -105,7 +105,7 @@ def build_app() -> gr.Blocks:
             choices=customers,
             value=default_customer,
             label="Customer",
-            info="Switches every tenant-bound view to the selected customer.",
+            info="Switch tenant context.",
         )
 
         # ---------- Main canvas ----------
@@ -416,8 +416,14 @@ def _skeleton_view(label: str) -> str:
 def _render_footer(*, version: str) -> str:
     """Build the persistent footer status strip.
 
-    Right side: an SVG pulse-line that animates via CSS to
-    suggest the system is alive. Left side: copyright + version.
+    Left side: a rotating quote band cycling through three short,
+    confident product affirmations. Right side: a System Health
+    pulse + status. The version tag tucks in at the far right so
+    the chrome stays compact.
+
+    The quote rotation is pure CSS — three ``span`` rows stacked
+    in absolute position, fading in turn via ``@keyframes`` (see
+    style.css §"Engagement quote band"). No JS, no Gradio coupling.
     """
     pulse_svg = (
         '<svg width="120" height="14" viewBox="0 0 120 14" '
@@ -429,16 +435,30 @@ def _render_footer(*, version: str) -> str:
         'opacity="0.85"/>'
         "</svg>"
     )
+    quotes = (
+        "Augmenting clinicians. Never replacing them.",
+        "Every decision backed by an audit trail.",
+        "Front-line operations. Back-office trust.",
+        "Real evidence. Real-time decisions.",
+        "Where compliance meets velocity.",
+    )
+    quote_spans = "".join(
+        f'<span class="clarion-quote clarion-quote-{i}">'
+        f"&ldquo;{_html.escape(q, quote=True)}&rdquo;</span>"
+        for i, q in enumerate(quotes)
+    )
     return (
         '<div class="clarion-footer">'
         '<div class="clarion-footer-left">'
-        f'<span>&copy; 2026 Clarion Vision Platform</span>'
-        f'<span class="clarion-footer-version">v{_html.escape(version, quote=True)}</span>'
+        '<div class="clarion-quote-band" aria-live="polite">'
+        + quote_spans
+        + "</div>"
         "</div>"
         '<div class="clarion-footer-right">'
         '<span class="clarion-footer-label">System Health</span>'
         + pulse_svg
         + '<span class="clarion-footer-status">Operational</span>'
+        f'<span class="clarion-footer-version">v{_html.escape(version, quote=True)}</span>'
         "</div>"
         "</div>"
     )

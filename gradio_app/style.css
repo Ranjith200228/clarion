@@ -756,6 +756,67 @@
     letter-spacing: 0.08em;
 }
 
+/* ----- Hide Gradio's stock "Use via API · Built with Gradio"
+ *       footer chrome — Clarion ships its own footer above. ---- */
+.gradio-container > footer,
+.gradio-container footer.svelte-mpyp5e {
+    display: none !important;
+}
+
+/* ----- Engagement quote band ----------------------------------
+ * Five short product affirmations cycle in the footer via pure
+ * CSS. Each span is absolutely positioned in the same slot and
+ * its opacity is driven by a shared 20s keyframe — each quote
+ * gets a 20% window of full visibility with a fade in/out either
+ * side. The container reserves the row height so the rest of the
+ * footer never reflows mid-cycle. ``prefers-reduced-motion``
+ * collapses the rotation to a single static quote.
+ * ----------------------------------------------------------- */
+.clarion-quote-band {
+    position: relative;
+    min-height: 18px;
+    min-width: 240px;
+    flex: 1 1 auto;
+    font-style: italic;
+    color: var(--c-text-muted);
+    font-size: var(--fs-xs);
+    letter-spacing: 0.01em;
+}
+.clarion-quote-band .clarion-quote {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    animation: clarion-quote-rotate 25s linear infinite;
+}
+/* Five quotes share one 25s timeline; each one is visible for
+ * its own 5s window then fades out as the next fades in. */
+.clarion-quote-band .clarion-quote-0 { animation-delay: 0s;  }
+.clarion-quote-band .clarion-quote-1 { animation-delay: 5s;  }
+.clarion-quote-band .clarion-quote-2 { animation-delay: 10s; }
+.clarion-quote-band .clarion-quote-3 { animation-delay: 15s; }
+.clarion-quote-band .clarion-quote-4 { animation-delay: 20s; }
+
+@keyframes clarion-quote-rotate {
+    0%   { opacity: 0; transform: translateY(4px); }
+    3%   { opacity: 1; transform: translateY(0); }
+    20%  { opacity: 1; transform: translateY(0); }
+    23%  { opacity: 0; transform: translateY(-4px); }
+    100% { opacity: 0; transform: translateY(-4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .clarion-quote-band .clarion-quote {
+        animation: none;
+        opacity: 0;
+    }
+    .clarion-quote-band .clarion-quote-0 {
+        opacity: 1;
+    }
+}
+
 
 /* ============================================================
  * Phase H3 - per-panel polish
