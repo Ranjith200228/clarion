@@ -202,59 +202,19 @@ def build_app() -> gr.Blocks:
         # data and Gradio swaps it in. This sidesteps Gradio's
         # event-queue coalescing - the user always sees the
         # shimmer for the duration of the round-trip.
-        # Skeleton-on-switch implementation: a JS handler that
-        # paints shimmer placeholders into every gr.HTML view
-        # container synchronously in the browser BEFORE the
-        # Python callback fires. Gradio then runs refresh_all and
-        # the new HTML strings get swapped in when the round-trip
-        # returns.
-        #
-        # Critical detail: the JS function takes the same inputs
-        # the Python handler expects and MUST return them
-        # unchanged. Returning [] would call refresh_all with
-        # zero args and the views would stay stuck on the
-        # skeleton because refresh_all crashes.
-        skeleton_js = """
-(customer_id, live_state, voice_state) => {
-    const skel = `
-      <div class="clarion-stack" style="gap: 20px;">
-        <div class="clarion-stack" style="gap: 8px;">
-          <div class="clarion-skeleton" style="height: 22px; width: 280px;"></div>
-          <div class="clarion-skeleton" style="height: 12px; width: 360px;"></div>
-        </div>
-        <div class="clarion-row" style="gap: 12px; flex-wrap: wrap;">
-          <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:120px;height:96px;"></div>
-          <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:120px;height:96px;"></div>
-          <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:120px;height:96px;"></div>
-          <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:120px;height:96px;"></div>
-        </div>
-        <div class="clarion-row" style="gap: 16px;">
-          <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:0;height:220px;border-radius:var(--r-lg);"></div>
-          <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:0;height:220px;border-radius:var(--r-lg);"></div>
-        </div>
-      </div>`;
-    // Match any gr.HTML element holding one of our v2 views (they
-    // all wrap their content in a top-level .clarion-stack). This
-    // avoids blanking the brand strip, footer, or any chat-widget
-    // HTML which use different markup.
-    document.querySelectorAll('.prose, .gradio-html, [data-testid="html"]').forEach(function(el) {
-        if (el.querySelector && el.querySelector('.clarion-stack')) {
-            el.innerHTML = skel;
-        }
-    });
-    // Pass the original inputs through unchanged so refresh_all
-    // gets called with the right args.
-    return [customer_id, live_state, voice_state];
-}
-"""
-
-        # Switcher change: JS paints skeletons synchronously,
-        # then refresh_all swaps real data in when it returns.
+        # Customer switch fans out to every customer-bound view.
+        # The JS-skeleton attempts (H11.2 .then() chain + the
+        # js= injection) caused intermittent blank-canvas bugs
+        # on this Gradio 4.44 version - either refresh_all
+        # crashed silently from input misalignment or the JS
+        # ran during page-load validation in a way that broke
+        # later tab content. The fade-in animation on every
+        # .clarion-stack already provides a "data arriving" cue
+        # without a separate skeleton phase.
         customer_dd.change(
             fn=refresh_all,
             inputs=[customer_dd, live.state, voice.state],
             outputs=outputs,
-            js=skeleton_js,
         )
         # Initial population on app load - no skeleton flash here
         # because the first paint is already the empty html_outputs
