@@ -87,59 +87,7 @@ def build_app() -> gr.Blocks:
     default_customer = customers[0]
     version = _resolve_version()
 
-    # Voice Intelligence skeleton-on-switch: inject a vanilla <script>
-    # into <head> via Gradio's head= passthrough. This bypasses both
-    # the gr.HTML sanitizer (strips <script>) and the js= event hook
-    # (which silently failed to fire in 4.44). The handler polls for
-    # the customer dropdown + #clarion-vi-canvas to appear, then on
-    # change it swaps the canvas content for a shimmer block. When
-    # refresh_all returns the real HTML, Gradio overwrites the
-    # placeholder via its normal output diff.
-    skeleton_head = """
-<script>
-(function () {
-  function init() {
-    var dd = document.querySelector('.gradio-container select');
-    var vi = document.getElementById('clarion-vi-canvas');
-    if (!dd || !vi) { setTimeout(init, 400); return; }
-    if (dd.__clarionViArmed) { return; }
-    dd.__clarionViArmed = true;
-    var SKEL = '<div class=\"clarion-stack\" style=\"gap:20px;\">'
-      + '<div class=\"clarion-stack\" style=\"gap:8px;\">'
-      + '<div class=\"clarion-skeleton\" style=\"height:22px;width:280px;\"></div>'
-      + '<div class=\"clarion-skeleton\" style=\"height:12px;width:360px;\"></div>'
-      + '</div>'
-      + '<div class=\"clarion-row\" style=\"gap:12px;flex-wrap:wrap;\">'
-      + '<div class=\"clarion-skeleton clarion-skeleton-block\" style=\"flex:1 1 0;min-width:120px;height:96px;\"></div>'
-      + '<div class=\"clarion-skeleton clarion-skeleton-block\" style=\"flex:1 1 0;min-width:120px;height:96px;\"></div>'
-      + '<div class=\"clarion-skeleton clarion-skeleton-block\" style=\"flex:1 1 0;min-width:120px;height:96px;\"></div>'
-      + '<div class=\"clarion-skeleton clarion-skeleton-block\" style=\"flex:1 1 0;min-width:120px;height:96px;\"></div>'
-      + '</div>'
-      + '<div class=\"clarion-row\" style=\"gap:16px;\">'
-      + '<div class=\"clarion-skeleton clarion-skeleton-block\" style=\"flex:1 1 0;min-width:0;height:220px;border-radius:12px;\"></div>'
-      + '<div class=\"clarion-skeleton clarion-skeleton-block\" style=\"flex:1 1 0;min-width:0;height:220px;border-radius:12px;\"></div>'
-      + '</div>'
-      + '</div>';
-    dd.addEventListener('change', function () {
-      var target = document.getElementById('clarion-vi-canvas');
-      if (target) { target.innerHTML = SKEL; }
-    });
-  }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
-})();
-</script>
-""".strip()
-
-    with gr.Blocks(
-        title=TITLE,
-        theme=CLARION_THEME,
-        css=CSS,
-        head=skeleton_head,
-    ) as demo:
+    with gr.Blocks(title=TITLE, theme=CLARION_THEME, css=CSS) as demo:
         # ---------- Top strip ----------
         # The brand strip never rebuilds — it's static chrome.
         gr.HTML(
@@ -204,12 +152,12 @@ def build_app() -> gr.Blocks:
         # ---------- Footer strip ----------
         gr.HTML(_render_footer(version=version))
 
-        def refresh_all(  # type: ignore[no-untyped-def]
+        def _compute_views(  # type: ignore[no-untyped-def]
             customer_id: str,
             live_state: tab_live_agent.LiveAgentState,
             voice_state: tab_voice_agent.VoiceAgentState,
         ):
-            """Reload every view that depends on the customer dropdown.
+            """Build the full tuple of view outputs for a customer.
 
             Mission Control + Cost & SLO are cross-tenant — they
             still rebuild on every switch so a viewer toggling
@@ -222,6 +170,7 @@ def build_app() -> gr.Blocks:
                 # so the next voice turn starts a fresh transcript.
                 session_id="",
             )
+            new_live_state = tab_live_agent.set_customer(live_state, customer_id)
             mc = _render_mission_control()
             so = _render_sentinel_ops(customer_id)
             af = _render_agent_flow(customer_id)
@@ -230,11 +179,55 @@ def build_app() -> gr.Blocks:
             p360 = _render_patient_360(customer_id)
             cs = _render_cost_slo()
             cfg = _render_configuration(customer_id)
-            new_live_state = tab_live_agent.set_customer(live_state, customer_id)
             return (
                 mc, so, af, vi, ho, p360,
                 new_live_state, new_voice_state, cs, cfg,
             )
+
+        def refresh_on_switch(  # type: ignore[no-untyped-def]
+            customer_id: str,
+            live_state: tab_live_agent.LiveAgentState,
+            voice_state: tab_voice_agent.VoiceAgentState,
+        ):
+            """Generator for the customer-switch event.
+
+            First yield paints the Voice Intelligence skeleton (other
+            panels keep their prior HTML via ``gr.update()``) so the
+            operator sees shimmer feedback while we compute the real
+            per-tenant roll-ups; second yield writes the real data
+            on top.
+            """
+            new_live_state = tab_live_agent.set_customer(live_state, customer_id)
+            new_voice_state = tab_voice_agent.VoiceAgentState(
+                customer_id=customer_id,
+                session_id="",
+            )
+            yield (
+                gr.update(),  # mc_html
+                gr.update(),  # so_html
+                gr.update(),  # af_html
+                _skeleton_view("Voice Intelligence"),  # vi_html
+                gr.update(),  # ho_html
+                gr.update(),  # p360_html
+                new_live_state,
+                new_voice_state,
+                gr.update(),  # cs_html
+                gr.update(),  # cfg_html
+            )
+            yield _compute_views(customer_id, live_state, voice_state)
+
+        def initial_load(  # type: ignore[no-untyped-def]
+            customer_id: str,
+            live_state: tab_live_agent.LiveAgentState,
+            voice_state: tab_voice_agent.VoiceAgentState,
+        ):
+            """Non-generator function for ``demo.load`` — Gradio's
+            bootstrap deadlocks if the load callback streams via
+            yield, so we return the computed tuple directly. The
+            first paint already shows empty defaults so there's no
+            skeleton to flash here.
+            """
+            return _compute_views(customer_id, live_state, voice_state)
 
         outputs = [
             mc_html,
@@ -249,18 +242,20 @@ def build_app() -> gr.Blocks:
             cfg_html,
         ]
 
-        # Voice Intelligence skeleton: the head= script (see
-        # skeleton_head above) listens on the dropdown's change
-        # event and paints a shimmer into #clarion-vi-canvas
-        # synchronously, before this Python callback round-trips.
+        # Voice Intelligence skeleton-on-switch: refresh_on_switch
+        # is a generator, so Gradio streams its yields back to the
+        # client. First yield paints the shimmer into the VI canvas;
+        # second yield overwrites it with the real per-tenant HTML.
         customer_dd.change(
-            fn=refresh_all,
+            fn=refresh_on_switch,
             inputs=[customer_dd, live.state, voice.state],
             outputs=outputs,
         )
 
+        # demo.load uses the non-generator path - Gradio bootstrap
+        # deadlocks when the load callback streams via yield.
         demo.load(
-            fn=refresh_all,
+            fn=initial_load,
             inputs=[customer_dd, live.state, voice.state],
             outputs=outputs,
         )
