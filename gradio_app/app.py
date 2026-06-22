@@ -87,7 +87,56 @@ def build_app() -> gr.Blocks:
     default_customer = customers[0]
     version = _resolve_version()
 
-    with gr.Blocks(title=TITLE, theme=CLARION_THEME, css=CSS) as demo:
+    # Page-load JS: arms a native change listener on the customer
+    # dropdown that paints shimmer blocks into Voice Intelligence's
+    # gr.HTML container (#clarion-vi-canvas) whenever the customer
+    # changes. Gradio's natural change handler then runs
+    # refresh_all and the real HTML replaces the skeleton when
+    # the round-trip completes.
+    #
+    # The js= on gr.Blocks runs once after the app mounts -
+    # different from js= on an event handler, which Gradio's
+    # sanitiser apparently swallows in 4.44.
+    page_load_js = """
+() => {
+    if (window.__clarionVISkelArmed) return;
+    const skel = `
+        <div class=\"clarion-stack\" style=\"gap: 20px;\">
+          <div class=\"clarion-stack\" style=\"gap: 8px;\">
+            <div class=\"clarion-skeleton\" style=\"height: 24px; width: 220px;\"></div>
+            <div class=\"clarion-skeleton\" style=\"height: 12px; width: 340px;\"></div>
+          </div>
+          <div class=\"clarion-row\" style=\"gap: 12px; flex-wrap: wrap;\">
+            <div class=\"clarion-skeleton clarion-skeleton-block\" style=\"flex:1 1 0;min-width:140px;height:104px;\"></div>
+            <div class=\"clarion-skeleton clarion-skeleton-block\" style=\"flex:1 1 0;min-width:140px;height:104px;\"></div>
+            <div class=\"clarion-skeleton clarion-skeleton-block\" style=\"flex:1 1 0;min-width:140px;height:104px;\"></div>
+            <div class=\"clarion-skeleton clarion-skeleton-block\" style=\"flex:1 1 0;min-width:140px;height:104px;\"></div>
+          </div>
+          <div class=\"clarion-row\" style=\"gap: 16px;\">
+            <div class=\"clarion-skeleton clarion-skeleton-block\" style=\"flex:1 1 0;min-width:0;height:260px;border-radius:var(--r-lg);\"></div>
+            <div class=\"clarion-skeleton clarion-skeleton-block\" style=\"flex:1 1 0;min-width:0;height:260px;border-radius:var(--r-lg);\"></div>
+          </div>
+        </div>`;
+    function tryArm() {
+        const dd = document.querySelector('.gradio-container select');
+        const vi = document.getElementById('clarion-vi-canvas');
+        if (!dd || !vi) { setTimeout(tryArm, 200); return; }
+        dd.addEventListener('change', function() {
+            const target = document.getElementById('clarion-vi-canvas');
+            if (target) { target.innerHTML = skel; }
+        });
+        window.__clarionVISkelArmed = true;
+    }
+    tryArm();
+}
+"""
+
+    with gr.Blocks(
+        title=TITLE,
+        theme=CLARION_THEME,
+        css=CSS,
+        js=page_load_js,
+    ) as demo:
         # ---------- Top strip ----------
         # The brand strip never rebuilds — it's static chrome.
         gr.HTML(
@@ -211,57 +260,10 @@ def build_app() -> gr.Blocks:
             outputs=outputs,
         )
 
-        # Scoped skeleton: a tiny <script> tag attaches a native
-        # change listener to the customer dropdown and paints
-        # shimmer blocks into #clarion-vi-canvas whenever the
-        # value changes. Gradio's natural change handler then
-        # runs refresh_all and the real HTML replaces the
-        # skeleton when the round-trip returns.
-        #
-        # We use gr.HTML(elem_id="clarion-skel-bootstrap") so
-        # Gradio doesn't escape the <script> tag (its sanitiser
-        # leaves <script> alone inside gr.HTML by default).
-        gr.HTML(
-            """
-<script>
-(function attachVISkeleton() {
-  if (window.__clarionVISkelArmed) return;  // idempotent
-  const skel = `
-    <div class="clarion-stack" style="gap: 20px;">
-      <div class="clarion-stack" style="gap: 8px;">
-        <div class="clarion-skeleton" style="height: 24px; width: 220px;"></div>
-        <div class="clarion-skeleton" style="height: 12px; width: 340px;"></div>
-      </div>
-      <div class="clarion-row" style="gap: 12px; flex-wrap: wrap;">
-        <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:140px;height:104px;"></div>
-        <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:140px;height:104px;"></div>
-        <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:140px;height:104px;"></div>
-        <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:140px;height:104px;"></div>
-      </div>
-      <div class="clarion-row" style="gap: 16px;">
-        <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:0;height:260px;border-radius:var(--r-lg);"></div>
-        <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:0;height:260px;border-radius:var(--r-lg);"></div>
-      </div>
-    </div>`;
-
-  function tryArm() {
-    const dd = document.querySelector('.gradio-container select');
-    const vi = document.getElementById('clarion-vi-canvas');
-    if (!dd || !vi) {
-      setTimeout(tryArm, 200);
-      return;
-    }
-    dd.addEventListener('change', function() {
-      const target = document.getElementById('clarion-vi-canvas');
-      if (target) { target.innerHTML = skel; }
-    });
-    window.__clarionVISkelArmed = true;
-  }
-  tryArm();
-})();
-</script>
-            """
-        )
+        # (Voice Intelligence skeleton is armed via the
+        # page_load_js passed to gr.Blocks above - see top of
+        # build_app. Gradio strips <script> tags from gr.HTML in
+        # 4.44 so we can't inject the listener that way.)
         # Initial population on app load - no skeleton flash here
         # because the first paint is already the empty html_outputs
         # default; refresh_all writes the real data on top.
