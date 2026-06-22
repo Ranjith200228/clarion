@@ -1781,6 +1781,28 @@ def _humanize(customer_id: str | None) -> str:
     return " ".join(part.capitalize() for part in customer_id.split("_"))
 
 
+# Per-tenant accent colors used by the customer-aware theme override
+# in app.py. Hex strings — the live override block injects them into
+# --c-accent / --c-accent-dim so KPI tile edges, badges, and focus
+# rings ripple to the active tenant's identity when the dropdown
+# changes. Unknown tenants fall back to the cyan default.
+CUSTOMER_ACCENTS: dict[str, tuple[str, str]] = {
+    "ophthalmology": ("#06B6D4", "#0E7490"),   # cyan
+    "orthopedics":   ("#F59E0B", "#B45309"),   # amber
+}
+
+
+def customer_accent(customer_id: str | None) -> tuple[str, str]:
+    """Return ``(accent, accent_dim)`` hex colors for ``customer_id``.
+
+    Falls back to the cyan default for unknown tenants so the UI
+    never breaks on a new customer that hasn't been color-coded yet.
+    """
+    if not customer_id:
+        return ("#06B6D4", "#0E7490")
+    return CUSTOMER_ACCENTS.get(customer_id, ("#06B6D4", "#0E7490"))
+
+
 def _composite_headline_score(report: EvaluationReport) -> float:
     """0..1 composite used to bucket a tenant into a health band.
 

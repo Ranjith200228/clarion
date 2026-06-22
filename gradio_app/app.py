@@ -98,6 +98,22 @@ def build_app() -> gr.Blocks:
             )
         )
 
+        # ----- Tenant-aware identity layer ------------------------
+        # Three skinny components sit between the brand strip and
+        # the customer dropdown. All three rebuild on every customer
+        # switch so the page identity shifts with the active tenant.
+        #
+        #   1. accent_css     - hidden <style> override that swaps
+        #                       --c-accent / --c-accent-dim site-wide.
+        #   2. greeting_html  - time-of-day greeting + per-tenant
+        #                       attention count ("3 items need eyes").
+        #   3. standout_html  - the single most important fact for
+        #                       this tenant right now (lands recruiters
+        #                       on a number, not a navigation tree).
+        accent_css = gr.HTML(_render_accent_css(default_customer))
+        greeting_html = gr.HTML(_render_greeting(default_customer))
+        standout_html = gr.HTML(_render_standout(default_customer))
+
         # Customer switcher sits between the brand strip and the
         # main canvas so it reads as a tenant context selector,
         # not a tab control.
@@ -163,6 +179,12 @@ def build_app() -> gr.Blocks:
             still rebuild on every switch so a viewer toggling
             ophthalmology -> orthopedics sees the executive view
             stay current with whatever was just loaded.
+
+            Returns 13 values in the order matching ``outputs``:
+              identity layer:  accent_css, greeting, standout
+              tab views:       mc, so, af, vi, ho, p360
+              session states:  live_state, voice_state
+              tail views:      cs, cfg
             """
             new_voice_state = tab_voice_agent.VoiceAgentState(
                 customer_id=customer_id,
@@ -171,6 +193,9 @@ def build_app() -> gr.Blocks:
                 session_id="",
             )
             new_live_state = tab_live_agent.set_customer(live_state, customer_id)
+            accent = _render_accent_css(customer_id)
+            greeting = _render_greeting(customer_id)
+            standout = _render_standout(customer_id)
             mc = _render_mission_control()
             so = _render_sentinel_ops(customer_id)
             af = _render_agent_flow(customer_id)
@@ -180,6 +205,7 @@ def build_app() -> gr.Blocks:
             cs = _render_cost_slo()
             cfg = _render_configuration(customer_id)
             return (
+                accent, greeting, standout,
                 mc, so, af, vi, ho, p360,
                 new_live_state, new_voice_state, cs, cfg,
             )
@@ -202,17 +228,24 @@ def build_app() -> gr.Blocks:
                 customer_id=customer_id,
                 session_id="",
             )
+            # First yield: skeleton only on Voice Intelligence; the
+            # identity-layer trio (accent / greeting / standout)
+            # rebuilds immediately so the page shifts persona before
+            # the real per-tenant views finish computing.
             yield (
-                gr.update(),  # mc_html
-                gr.update(),  # so_html
-                gr.update(),  # af_html
+                _render_accent_css(customer_id),    # accent_css
+                _render_greeting(customer_id),      # greeting_html
+                _render_standout(customer_id),      # standout_html
+                gr.update(),                        # mc_html
+                gr.update(),                        # so_html
+                gr.update(),                        # af_html
                 _skeleton_view("Voice Intelligence"),  # vi_html
-                gr.update(),  # ho_html
-                gr.update(),  # p360_html
+                gr.update(),                        # ho_html
+                gr.update(),                        # p360_html
                 new_live_state,
                 new_voice_state,
-                gr.update(),  # cs_html
-                gr.update(),  # cfg_html
+                gr.update(),                        # cs_html
+                gr.update(),                        # cfg_html
             )
             yield _compute_views(customer_id, live_state, voice_state)
 
@@ -241,6 +274,9 @@ def build_app() -> gr.Blocks:
             )
 
         outputs = [
+            accent_css,
+            greeting_html,
+            standout_html,
             mc_html,
             so_html,
             af_html,
@@ -371,6 +407,184 @@ def _render_configuration(customer_id: str) -> str:
     helper is a thin pass-through.
     """
     return configuration.build_html(customer_id)
+
+
+def _render_accent_css(customer_id: str) -> str:
+    """Inline ``<style>`` block that swaps ``--c-accent`` site-wide
+    to the active tenant's identity color.
+
+    Lives as its own ``gr.HTML`` component so Gradio can replace it
+    independently on customer switch - that way the accent ripple
+    through KPI tile edges, badges, sparklines, focus rings happens
+    in the same paint as the view content swap below it.
+    """
+    accent, accent_dim = data_sources.customer_accent(customer_id)
+    return (
+        "<style>"
+        ":root, .gradio-container {"
+        f"  --c-accent: {accent};"
+        f"  --c-accent-dim: {accent_dim};"
+        "}"
+        "</style>"
+    )
+
+
+def _render_greeting(customer_id: str) -> str:
+    """Time-of-day greeting + per-tenant attention count.
+
+    Sits between the brand strip and the customer dropdown so the
+    operator lands on a personalized line, not a static label. The
+    attention count rolls escalations + emergencies for the active
+    tenant from disk; falls back to a calm "all clear" line when
+    nothing needs eyes.
+
+    Server-time based - good enough for a single-operator demo /
+    portfolio piece; a multi-region deployment would render this
+    client-side from the browser's clock instead.
+    """
+    from datetime import datetime as _dt
+
+    hour = _dt.now().hour
+    if hour < 5 or hour >= 22:
+        period = "Working late"
+    elif hour < 12:
+        period = "Good morning"
+    elif hour < 17:
+        period = "Good afternoon"
+    else:
+        period = "Good evening"
+
+    display = data_sources._humanize(customer_id)
+    try:
+        snapshots = data_sources.all_tenant_snapshots()
+        escalations = data_sources.recent_escalations(snapshots)
+        emergencies = data_sources.recent_emergencies(snapshots)
+        attention = sum(
+            1 for x in (*escalations, *emergencies) if x.tenant == display
+        )
+    except Exception:
+        attention = 0
+
+    if attention > 0:
+        attention_html = (
+            f'<span class="clarion-greeting-attention">'
+            f'<span class="clarion-greeting-count">{attention}</span>'
+            f' item{"s" if attention != 1 else ""} need your eyes</span>'
+        )
+    else:
+        attention_html = (
+            '<span class="clarion-greeting-allclear">'
+            'All clear on this tenant.</span>'
+        )
+
+    return (
+        '<div class="clarion-greeting">'
+        f'<span class="clarion-greeting-hello">{_html.escape(period)}, '
+        'operator.</span> '
+        f'<span class="clarion-greeting-context">'
+        f'{_html.escape(display)}'
+        '</span>'
+        ' &middot; '
+        f"{attention_html}"
+        "</div>"
+    )
+
+
+def _render_standout(customer_id: str) -> str:
+    """The single most important fact for this tenant right now.
+
+    Picks one headline from the active tenant's data using a small
+    priority ladder:
+
+      1. emergencies pending  -> "X emergencies awaiting review"
+      2. escalations pending  -> "X escalations need triage"
+      3. containment dipped   -> "Containment X% - watch for trend"
+      4. healthy + steady     -> "Containment X% / Pass rate Y%"
+      5. no data on disk      -> calm hint to run the harness
+
+    A second line carries a numeric back-up that adds confidence
+    without crowding the headline. Rendered as a card with a left
+    accent strip that picks up ``--c-accent`` (the per-tenant color
+    swap from ``_render_accent_css``), so the card visibly belongs
+    to the active tenant.
+    """
+    try:
+        snap = data_sources.build_tenant_snapshot(customer_id)
+    except Exception:
+        snap = None
+
+    if snap is None or not snap.has_data:
+        return (
+            '<div class="clarion-standout" data-tone="info">'
+            '<div class="clarion-standout-eyebrow">Today\'s standout</div>'
+            '<div class="clarion-standout-headline">'
+            f'No artifacts on disk yet for {_html.escape(_humanize_safe(customer_id))}.'
+            '</div>'
+            '<div class="clarion-standout-sub">'
+            "Run <code>python -m clarion.eval --customer "
+            f"{_html.escape(customer_id)}</code> to populate the dashboard."
+            '</div>'
+            '</div>'
+        )
+
+    try:
+        snapshots = data_sources.all_tenant_snapshots()
+        escalations = data_sources.recent_escalations(snapshots)
+        emergencies = data_sources.recent_emergencies(snapshots)
+        tenant_emergencies = [
+            e for e in emergencies if e.tenant == snap.display_name
+        ]
+        tenant_escalations = [
+            e for e in escalations if e.tenant == snap.display_name
+        ]
+    except Exception:
+        tenant_emergencies = []
+        tenant_escalations = []
+
+    containment_pct = f"{snap.containment_rate * 100:.1f}%"
+    pass_pct = f"{snap.pass_rate * 100:.1f}%"
+
+    if tenant_emergencies:
+        n = len(tenant_emergencies)
+        headline = f"{n} emergenc{'ies' if n != 1 else 'y'} awaiting review"
+        sub = (
+            f"Containment {containment_pct} &middot; "
+            f"Pass rate {pass_pct}"
+        )
+        tone = "critical"
+    elif tenant_escalations:
+        n = len(tenant_escalations)
+        headline = f"{n} escalation{'s' if n != 1 else ''} need triage"
+        sub = (
+            f"Pass rate {pass_pct} &middot; "
+            f"Containment {containment_pct}"
+        )
+        tone = "warning"
+    elif snap.containment_rate < 0.55:
+        headline = f"Containment dipped to {containment_pct}"
+        sub = f"Last run {_html.escape(snap.last_run_relative)} &middot; watch for trend"
+        tone = "warning"
+    else:
+        headline = f"All systems steady &middot; containment {containment_pct}"
+        sub = (
+            f"Pass rate {pass_pct} &middot; "
+            f"{snap.scenario_count} scenarios scored "
+            f"{_html.escape(snap.last_run_relative)}"
+        )
+        tone = "healthy"
+
+    return (
+        f'<div class="clarion-standout" data-tone="{tone}">'
+        '<div class="clarion-standout-eyebrow">Today\'s standout</div>'
+        f'<div class="clarion-standout-headline">{headline}</div>'
+        f'<div class="clarion-standout-sub">{sub}</div>'
+        "</div>"
+    )
+
+
+def _humanize_safe(customer_id: str | None) -> str:
+    """Display-name helper local to ``_render_standout``'s empty path."""
+    return data_sources._humanize(customer_id)
 
 
 def _skeleton_view(label: str) -> str:

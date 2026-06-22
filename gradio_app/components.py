@@ -637,10 +637,20 @@ def brand_strip(
     # SVG mark — a faceted hex/diamond made of cyan gradient
     # planes. Reads as a stylised mission-control sigil; crisp at
     # any size and free of Unicode font dependencies.
+    # Easter egg: clicking the hex mark adds the `.clarion-spin`
+    # class which triggers a 600ms 360-degree rotation defined in
+    # style.css. Inline classList.toggle is the smallest JS surface
+    # that survives Gradio's HTML sanitizer (mirrors what the theme
+    # toggle uses), so we don't need a separate <script>. The class
+    # is removed at the end of the animation via animationend - the
+    # CSS rule itself does the cleanup with `animation-fill-mode`.
     logo_svg = (
         '<svg class="clarion-brand-mark" viewBox="0 0 36 36" '
         'width="38" height="38" xmlns="http://www.w3.org/2000/svg" '
-        'aria-label="Clarion Vision">'
+        'aria-label="Clarion Vision" '
+        'role="button" tabindex="0" '
+        "onclick=\"this.classList.remove('clarion-spin');"
+        "void this.offsetWidth;this.classList.add('clarion-spin')\">"
         "<defs>"
         '<linearGradient id="clarion-logo-grad" x1="0%" y1="0%" '
         'x2="100%" y2="100%">'

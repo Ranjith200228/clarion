@@ -1177,3 +1177,195 @@
         transition: none !important;
     }
 }
+
+
+/* ============================================================
+ * Engagement layer — H12
+ *
+ * Per-tenant identity, time-of-day greeting, "Today's standout"
+ * hero card, KPI value entrance animation, and the logo
+ * easter-egg spin. All five share the engagement-pass commit and
+ * are designed to make the dashboard feel alive without adding
+ * meaningful network or runtime cost.
+ *
+ * Token contract:
+ *   --c-accent / --c-accent-dim get rebound per tenant by the
+ *   <style> block that _render_accent_css emits, so every rule
+ *   below that touches accent automatically ripples on switch.
+ * ============================================================ */
+
+/* ----- Time-of-day greeting strip -----------------------------
+ * Sits between the brand strip and the customer dropdown. Quiet
+ * by default; the attention count gets a small accent halo when
+ * it's non-zero so operators see it without scrolling. */
+.clarion-greeting {
+    padding: var(--sp-2) var(--sp-4);
+    margin-bottom: var(--sp-3);
+    font-size: var(--fs-sm);
+    color: var(--c-text-muted);
+    letter-spacing: 0.01em;
+}
+.clarion-greeting-hello {
+    color: var(--c-text-primary);
+    font-weight: var(--fw-semibold);
+}
+.clarion-greeting-context {
+    color: var(--c-accent);
+    font-weight: var(--fw-semibold);
+}
+.clarion-greeting-attention {
+    color: var(--c-text-primary);
+}
+.clarion-greeting-count {
+    display: inline-block;
+    min-width: 1.1em;
+    padding: 0 6px;
+    margin-right: 4px;
+    border-radius: 999px;
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--c-warning);
+    font-weight: var(--fw-bold);
+    font-variant-numeric: tabular-nums;
+}
+.clarion-greeting-allclear {
+    color: var(--c-healthy);
+    font-weight: var(--fw-semibold);
+    letter-spacing: 0.02em;
+}
+
+
+/* ----- Today's standout hero card -----------------------------
+ * Two-line callout. Left accent strip + soft background, both
+ * picking up the per-tenant accent. Tone variants tint the
+ * accent strip when the headline is urgent. */
+.clarion-standout {
+    position: relative;
+    padding: var(--sp-3) var(--sp-4) var(--sp-3) var(--sp-5);
+    margin-bottom: var(--sp-4);
+    background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--c-accent) 10%, var(--c-bg-panel)) 0%,
+        var(--c-bg-panel) 60%
+    );
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    animation: clarion-standout-arrive 380ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.clarion-standout::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: var(--c-accent);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--c-accent) 60%, transparent);
+}
+.clarion-standout[data-tone="warning"]::before  { background: var(--c-warning);  box-shadow: 0 0 12px color-mix(in srgb, var(--c-warning) 60%, transparent); }
+.clarion-standout[data-tone="critical"]::before { background: var(--c-critical); box-shadow: 0 0 12px color-mix(in srgb, var(--c-critical) 60%, transparent); }
+.clarion-standout[data-tone="healthy"]::before  { background: var(--c-healthy);  box-shadow: 0 0 12px color-mix(in srgb, var(--c-healthy) 60%, transparent); }
+.clarion-standout-eyebrow {
+    font-size: var(--fs-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--c-text-muted);
+    font-weight: var(--fw-semibold);
+    margin-bottom: 2px;
+}
+.clarion-standout-headline {
+    font-size: var(--fs-lg);
+    font-weight: var(--fw-bold);
+    color: var(--c-text-primary);
+    line-height: 1.3;
+    margin-bottom: 2px;
+}
+.clarion-standout-sub {
+    font-size: var(--fs-sm);
+    color: var(--c-text-muted);
+}
+.clarion-standout-sub code {
+    font-family: var(--font-mono);
+    background: var(--c-bg-subtle);
+    padding: 1px 6px;
+    border-radius: var(--r-sm);
+    color: var(--c-text-primary);
+    font-size: 0.85em;
+}
+@keyframes clarion-standout-arrive {
+    0%   { opacity: 0; transform: translateY(-8px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+
+/* ----- KPI value entrance animation ---------------------------
+ * On customer switch Gradio replaces the entire mission-control
+ * tab innerHTML. When the new HTML mounts, every KPI value gets
+ * a quick scale+fade entrance so the data feels like it's
+ * arriving, not just snapping in. Cheap, all-values compatible
+ * (works for percentages and currency too, unlike a counter
+ * tween), no JS. */
+.clarion-kpi-value {
+    animation: clarion-kpi-arrive 480ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes clarion-kpi-arrive {
+    0%   { opacity: 0; transform: scale(0.85) translateY(6px); filter: blur(2px); }
+    60%  { opacity: 1; filter: blur(0); }
+    100% { opacity: 1; transform: scale(1)   translateY(0);   filter: blur(0); }
+}
+
+
+/* ----- Brand-mark spin easter egg -----------------------------
+ * Click the hex logo -> 600ms 360-degree rotation with a subtle
+ * scale bounce in the middle. The class is re-added on every
+ * click via the inline onclick handler (the void this.offsetWidth
+ * step forces a reflow so the animation restarts even on rapid
+ * repeat clicks). */
+.clarion-brand-mark {
+    cursor: pointer;
+    transform-origin: 50% 50%;
+    transition: filter 200ms ease;
+}
+.clarion-brand-mark:hover {
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--c-accent) 55%, transparent));
+}
+.clarion-brand-mark.clarion-spin {
+    animation: clarion-brand-spin 700ms cubic-bezier(0.5, 0, 0.2, 1);
+}
+@keyframes clarion-brand-spin {
+    0%   { transform: rotate(0deg) scale(1); }
+    50%  { transform: rotate(180deg) scale(1.12); filter: drop-shadow(0 0 14px color-mix(in srgb, var(--c-accent) 80%, transparent)); }
+    100% { transform: rotate(360deg) scale(1); }
+}
+
+
+/* ----- Accent ripple ------------------------------------------
+ * Force per-tenant accent through the surfaces that previously
+ * hard-coded cyan. Each rule is additive on top of the existing
+ * tile / badge / focus styling; the per-tenant <style> block
+ * just changes what --c-accent points to, and everything below
+ * follows.
+ *
+ * Note: KPI tiles already use `border-left-color: var(--c-accent)`
+ * for data-status="info" via the rule at line ~128, so they
+ * ripple automatically. The rules below catch the surfaces that
+ * weren't using the token yet. */
+.clarion-greeting-context,
+.clarion-standout-eyebrow ~ .clarion-standout-headline strong {
+    color: var(--c-accent);
+}
+
+
+/* ----- Reduced motion fallback --------------------------------
+ * Honor users with motion-reduce preference for every animation
+ * defined above. Keep the entrance reveal but drop transforms. */
+@media (prefers-reduced-motion: reduce) {
+    .clarion-standout,
+    .clarion-kpi-value,
+    .clarion-brand-mark.clarion-spin {
+        animation: none !important;
+        opacity: 1;
+        transform: none;
+        filter: none;
+    }
+}
