@@ -1768,8 +1768,16 @@ def build_cost_slo(
 # ---------- low-level helpers ----------
 
 
-def _humanize(customer_id: str) -> str:
-    """customer_id -> Title Case display name."""
+def _humanize(customer_id: str | None) -> str:
+    """customer_id -> Title Case display name.
+
+    Guards against a None slipping in from Gradio's event pipeline
+    (seen during page-load when an input component hadn't bound its
+    default value yet) so the view renderers degrade gracefully
+    instead of stack-tracing.
+    """
+    if not customer_id:
+        return "Unknown Customer"
     return " ".join(part.capitalize() for part in customer_id.split("_"))
 
 

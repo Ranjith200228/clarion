@@ -216,18 +216,29 @@ def build_app() -> gr.Blocks:
             )
             yield _compute_views(customer_id, live_state, voice_state)
 
-        def initial_load(  # type: ignore[no-untyped-def]
-            customer_id: str,
-            live_state: tab_live_agent.LiveAgentState,
-            voice_state: tab_voice_agent.VoiceAgentState,
-        ):
-            """Non-generator function for ``demo.load`` — Gradio's
-            bootstrap deadlocks if the load callback streams via
-            yield, so we return the computed tuple directly. The
-            first paint already shows empty defaults so there's no
-            skeleton to flash here.
+        def initial_load():  # type: ignore[no-untyped-def]
+            """Non-generator callback wired to ``demo.load``.
+
+            ``demo.load`` in Gradio 4.44 doesn't reliably pass
+            ``inputs=`` to the function on the very first render, so
+            we read the default customer + fresh state values from
+            the enclosing closure instead. Two payoffs:
+
+            - the page-load handler never receives ``None`` for
+              customer_id and crashes inside ``_humanize``;
+            - we don't need ``inputs=`` on demo.load at all, which
+              sidesteps the "Too many arguments" Gradio warning.
             """
-            return _compute_views(customer_id, live_state, voice_state)
+            seed_live_state = tab_live_agent.LiveAgentState(
+                customer_id=default_customer,
+            )
+            seed_voice_state = tab_voice_agent.VoiceAgentState(
+                customer_id=default_customer,
+                session_id="",
+            )
+            return _compute_views(
+                default_customer, seed_live_state, seed_voice_state,
+            )
 
         outputs = [
             mc_html,
@@ -252,11 +263,11 @@ def build_app() -> gr.Blocks:
             outputs=outputs,
         )
 
-        # demo.load uses the non-generator path - Gradio bootstrap
-        # deadlocks when the load callback streams via yield.
+        # demo.load uses the non-generator path and reads its own
+        # defaults from the closure - passing inputs= here caused
+        # Gradio to send None for customer_id on the first render.
         demo.load(
             fn=initial_load,
-            inputs=[customer_dd, live.state, voice.state],
             outputs=outputs,
         )
 
