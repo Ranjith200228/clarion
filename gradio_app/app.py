@@ -194,57 +194,53 @@ def build_app() -> gr.Blocks:
             cfg_html,
         ]
 
-        # The eight HTML output slots get skeletoned during the
-        # customer switch (state slots stay untouched so live /
-        # voice agent context isn't disturbed mid-render).
-        html_outputs = [
-            mc_html, so_html, af_html, vi_html, ho_html,
-            p360_html, cs_html, cfg_html,
-        ]
+        # Skeleton-on-switch is implemented in pure JS (via the
+        # `js=` param on the change handler). The JS runs
+        # synchronously in the browser BEFORE the Python callback
+        # fires, paints the .clarion-skeleton blocks into every
+        # gr.HTML view container, then refresh_all returns real
+        # data and Gradio swaps it in. This sidesteps Gradio's
+        # event-queue coalescing - the user always sees the
+        # shimmer for the duration of the round-trip.
+        skeleton_js = """
+() => {
+    const skel = `
+      <div class="clarion-stack" style="gap: 20px;">
+        <div class="clarion-stack" style="gap: 8px;">
+          <div class="clarion-skeleton" style="height: 22px; width: 280px;"></div>
+          <div class="clarion-skeleton" style="height: 12px; width: 360px;"></div>
+        </div>
+        <div class="clarion-row" style="gap: 12px; flex-wrap: wrap;">
+          <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:120px;height:96px;"></div>
+          <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:120px;height:96px;"></div>
+          <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:120px;height:96px;"></div>
+          <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:120px;height:96px;"></div>
+        </div>
+        <div class="clarion-row" style="gap: 16px;">
+          <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:0;height:220px;border-radius:var(--r-lg);"></div>
+          <div class="clarion-skeleton clarion-skeleton-block" style="flex:1 1 0;min-width:0;height:220px;border-radius:var(--r-lg);"></div>
+        </div>
+      </div>`;
+    // Find all gr.HTML containers (.prose) on the current page
+    // and replace their content with the skeleton block. The
+    // 'clarion-stack' check filters out small HTML widgets like
+    // the brand strip + footer that we shouldn't blank out.
+    document.querySelectorAll('.prose, .gradio-html').forEach(el => {
+        if (el.querySelector && el.querySelector('.clarion-stack')) {
+            el.innerHTML = skel;
+        }
+    });
+    return [];
+}
+"""
 
-        def show_skeletons():  # type: ignore[no-untyped-def]
-            """Paint skeleton placeholders into every HTML slot
-            so the user gets immediate feedback when they pick a
-            new customer. `.then(refresh_all)` runs right after
-            to replace these with real data."""
-            return tuple(
-                _skeleton_view(label)
-                for label in (
-                    "Mission Control",
-                    "Sentinel Ops",
-                    "Agent Flow",
-                    "Voice Intelligence",
-                    "Healthcare Ops",
-                    "Patient 360",
-                    "Cost & SLO",
-                    "Configuration",
-                )
-            )
-
-        # Switcher change paints skeletons first, then fans out
-        # to the real refresh.
-        #
-        # Two Gradio knobs matter here:
-        #   queue=False on the skeleton step    - run immediately
-        #                                          on the UI thread,
-        #                                          don't sit in the
-        #                                          request queue.
-        #   show_progress="hidden" on both       - skip the default
-        #                                          progress overlay
-        #                                          which would paint
-        #                                          over the skeleton.
-        # Without these two, Gradio coalesces the two updates and
-        # the user only sees the final state - no visible skeleton.
+        # Switcher change: JS paints skeletons synchronously,
+        # then refresh_all swaps real data in when it returns.
         customer_dd.change(
-            fn=show_skeletons,
-            outputs=html_outputs,
-            queue=False,
-            show_progress="hidden",
-        ).then(
             fn=refresh_all,
             inputs=[customer_dd, live.state, voice.state],
             outputs=outputs,
-            show_progress="hidden",
+            js=skeleton_js,
         )
         # Initial population on app load - no skeleton flash here
         # because the first paint is already the empty html_outputs

@@ -1003,3 +1003,99 @@
     color: var(--c-text-muted);
     font-weight: var(--fw-semibold);
 }
+
+
+/* ============================================================
+ * Engagement polish - the difference between "static dashboard"
+ * and "live system". All CSS-only, no JS, no extra markup.
+ * Respects prefers-reduced-motion - all animations drop to a
+ * static end-state for users who've opted out.
+ * ============================================================ */
+
+/* Smooth fade-in for the main content area when it swaps. */
+.clarion-stack {
+    animation: clarion-fade-in 240ms var(--ease-out) both;
+}
+@keyframes clarion-fade-in {
+    0%   { opacity: 0; transform: translateY(4px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+/* KPI tiles get a subtle hover lift + glow that ties to the
+ * status colour. */
+.clarion-kpi-tile {
+    transition: transform 180ms var(--ease-out),
+                box-shadow 180ms var(--ease-out),
+                border-color 180ms var(--ease-out);
+}
+.clarion-kpi-tile:hover {
+    transform: translateY(-2px);
+    border-color: var(--c-border-strong);
+    box-shadow: 0 6px 16px -8px rgba(0, 0, 0, 0.5),
+                0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
+.clarion-kpi-tile[data-status="healthy"]:hover {
+    box-shadow: 0 6px 16px -8px rgba(16, 185, 129, 0.5),
+                0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
+.clarion-kpi-tile[data-status="warning"]:hover {
+    box-shadow: 0 6px 16px -8px rgba(245, 158, 11, 0.5),
+                0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
+.clarion-kpi-tile[data-status="critical"]:hover {
+    box-shadow: 0 6px 16px -8px rgba(239, 68, 68, 0.5),
+                0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
+
+/* Status badges with state=critical get a soft attention-pulse.
+ * The pulse is the same accent ring shape as the agent_node
+ * active dot so the design vocabulary is consistent. */
+.clarion-badge[data-state="critical"] {
+    animation: clarion-badge-pulse 2.4s ease-in-out infinite;
+}
+@keyframes clarion-badge-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    50%      { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.20); }
+}
+
+/* Tenant cards lift on hover too. */
+.clarion-tenant-card {
+    transition: transform 180ms var(--ease-out),
+                box-shadow 180ms var(--ease-out);
+}
+.clarion-tenant-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px -10px rgba(0, 0, 0, 0.6);
+}
+
+/* Panels get a barely-perceptible lift on hover. */
+.clarion-panel {
+    transition: border-color 200ms var(--ease-out);
+}
+.clarion-panel:hover {
+    border-color: var(--c-border-strong);
+}
+
+/* Sparkline lines on KPI tiles draw on as the page fades in -
+ * gives the tiles a "live data arriving" feel. */
+.clarion-kpi-spark polyline {
+    stroke-dasharray: 600;
+    stroke-dashoffset: 600;
+    animation: clarion-spark-draw 1.2s var(--ease-out) 200ms forwards;
+}
+@keyframes clarion-spark-draw {
+    to { stroke-dashoffset: 0; }
+}
+
+/* Honor user reduced-motion preference. */
+@media (prefers-reduced-motion: reduce) {
+    .clarion-stack,
+    .clarion-kpi-tile,
+    .clarion-tenant-card,
+    .clarion-panel,
+    .clarion-badge,
+    .clarion-kpi-spark polyline {
+        animation: none !important;
+        transition: none !important;
+    }
+}
