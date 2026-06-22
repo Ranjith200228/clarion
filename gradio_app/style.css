@@ -553,6 +553,22 @@
  * The selector is scoped under .gradio-container so we don't risk
  * styling tab widgets inside our own gr.HTML blocks.
  */
+/* Parent of the tablist must lay out tablist + tabpanels as a
+ * ROW so the left rail sits beside the content (sidebar layout),
+ * not above it (which would stack content below the nav and look
+ * like a blank canvas at the top). */
+.gradio-container .tabs {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    gap: var(--sp-4);
+}
+.gradio-container .tabs > .tabitem,
+.gradio-container .tabs > [role="tabpanel"] {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+}
+
 .gradio-container [role="tablist"] {
     flex-direction: column !important;
     align-items: stretch !important;
@@ -564,7 +580,8 @@
     background: var(--c-bg-panel);
     border: 1px solid var(--c-border);
     border-radius: var(--r-lg);
-    margin-right: var(--sp-4);
+    margin-right: 0;
+    flex-shrink: 0;
 }
 .gradio-container [role="tablist"] button[role="tab"] {
     text-align: left !important;
