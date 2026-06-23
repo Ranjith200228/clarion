@@ -12,7 +12,13 @@ from pydantic import ValidationError
 
 def _book_first(ctx: ToolContext) -> str:
     out = BookAppointmentTool().run(
-        BookAppointmentInput(slot_id="slot_demo_1", patient_id="pat_demo"),
+        BookAppointmentInput(
+            slot_id="slot_demo_1",
+            patient_id="pat_demo",
+            patient_name="Sasha Petrova",
+            patient_phone="(617) 584-1139",
+            patient_email="sasha.petrova@example.invalid",
+        ),
         ctx,
     )
     assert out.ok and out.appointment is not None

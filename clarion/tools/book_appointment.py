@@ -4,10 +4,17 @@ Wraps ``StructuredStore.book_slot``. The store treats double-book as an
 exceptional case (``SlotAlreadyBookedError``); we surface that to the
 agent as a structured ``ok=False`` so the LLM can apologise and offer a
 different slot.
+
+Patient details (name / phone / email) come in validated via
+``BookAppointmentInput`` and are persisted into the appointment's
+``notes`` column as JSON so the Patient 360 confirmation card,
+downstream PMS sync, and audit log all read the same captured values
+the caller actually confirmed during the conversation.
 """
 
 from __future__ import annotations
 
+import json
 from typing import ClassVar
 
 from clarion.pipelines.structured.store import SlotAlreadyBookedError
@@ -26,12 +33,21 @@ class BookAppointmentTool:
     output_model: ClassVar[type[BookAppointmentOutput]] = BookAppointmentOutput
 
     def run(self, input: BookAppointmentInput, ctx: ToolContext) -> BookAppointmentOutput:
+        notes_payload = {
+            "patient_name": input.patient_name,
+            "patient_phone": input.patient_phone,
+            "patient_email": input.patient_email,
+        }
+        if input.notes:
+            notes_payload["caller_notes"] = input.notes
+        serialised_notes = json.dumps(notes_payload, separators=(",", ":"))
+
         try:
             appt = run_with_retry(
                 lambda: ctx.structured.book_slot(
                     slot_id=input.slot_id,
                     patient_id=input.patient_id,
-                    notes=input.notes,
+                    notes=serialised_notes,
                 )
             )
         except SlotAlreadyBookedError as e:

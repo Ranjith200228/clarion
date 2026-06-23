@@ -36,6 +36,37 @@ TaskPriority = Literal["normal", "urgent"]
 # at least one row wiped by this guard before.
 _ID_PATTERN = r"^[A-Za-z][A-Za-z0-9_\-]{0,63}$"
 
+# ---------------------------------------------------------------
+# Patient-detail validators
+#
+# These three patterns guard the LLM's hand-typed fields against
+# obvious junk before the tool round-trips into the store. They
+# accept legitimate input formats (international names with
+# accents/apostrophes, US + international phone formats, normal
+# email addresses) and reject the failure modes we've actually
+# seen in production traces (empty strings, single words, "n/a",
+# pasted role labels like "Customer").
+#
+# Strict enough to catch hallucinations, lenient enough to not
+# block real callers. Lift to a richer parse step (libphonenumber,
+# email-validator) once we have signal that these false-positive.
+# ---------------------------------------------------------------
+
+# Two or more name parts: each part is letters/apostrophe/hyphen,
+# separated by spaces. Allows "Mary O'Brien", "Jean-Luc Picard",
+# "José García". Rejects "Customer", "TBD", "Ranjit" (single word).
+_NAME_PATTERN = r"^[A-Za-zÀ-ÖØ-öø-ÿ'\-]{2,}(?:\s+[A-Za-zÀ-ÖØ-öø-ÿ'\-]{1,}){1,4}$"
+
+# 7-20 chars of digits + common phone glyphs. Must contain at
+# least 7 digits in total. Accepts "(617) 584-1139", "+1 617 584
+# 1139", "6175841139". Rejects "ask me", "see notes".
+_PHONE_PATTERN = r"^[\d\s\-\(\)\+\.]{7,25}$"
+
+# Minimal RFC-5321-ish email check: local@domain.tld with no
+# whitespace and at least one dot in the domain. Good enough to
+# catch the LLM dropping "n/a" or "tbd" into the email slot.
+_EMAIL_PATTERN = r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$"
+
 
 class ToolOutput(BaseModel):
     """Base for every tool's output. Tools never raise to the agent — they
@@ -69,10 +100,41 @@ class SearchSlotsOutput(ToolOutput):
 
 
 class BookAppointmentInput(BaseModel):
+    """Inputs the booking specialist passes to ``book_appointment``.
+
+    The three patient-detail fields (``patient_name``, ``patient_phone``,
+    ``patient_email``) are required so the LLM cannot complete a
+    booking without collecting them - the regex validators ensure
+    they look like real values, not hallucinated placeholders like
+    "n/a" or single-word free text.
+
+    The booking specialist's persona prompt explicitly requires
+    asking the caller for each of these and confirming back before
+    the tool call; the schema is the safety net behind that prompt.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     slot_id: str = Field(min_length=1, pattern=_ID_PATTERN)
     patient_id: str = Field(min_length=1, pattern=_ID_PATTERN)
+    patient_name: str = Field(
+        min_length=3,
+        max_length=120,
+        pattern=_NAME_PATTERN,
+        description="Caller's full legal name as confirmed back to them.",
+    )
+    patient_phone: str = Field(
+        min_length=7,
+        max_length=25,
+        pattern=_PHONE_PATTERN,
+        description="Reachable phone number; any common format accepted.",
+    )
+    patient_email: str = Field(
+        min_length=5,
+        max_length=254,
+        pattern=_EMAIL_PATTERN,
+        description="Confirmation email; must look like a real address.",
+    )
     notes: str | None = Field(default=None, max_length=2000)
 
 

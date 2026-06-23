@@ -81,6 +81,9 @@ def test_full_booking_flow_for_cataract_pre_op(
                         arguments={
                             "slot_id": "slot_oph_001",
                             "patient_id": "pat_001",
+                            "patient_name": "John Doe",
+                            "patient_phone": "555-0100",
+                            "patient_email": "john.doe@example.invalid",
                             "notes": "Callback ok at 555-0100.",
                         },
                     ),

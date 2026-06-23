@@ -165,6 +165,9 @@ def test_reschedule_emerges_from_search_then_book(
                         arguments={
                             "slot_id": "slot_ortho_001",
                             "patient_id": "pat_101",
+                            "patient_name": "Casey Lopez",
+                            "patient_phone": "555-0142",
+                            "patient_email": "casey.lopez@example.invalid",
                         },
                     ),
                 )
