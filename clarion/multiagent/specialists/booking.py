@@ -7,10 +7,27 @@ router doesn't need to know that distinction.
 
 from __future__ import annotations
 
+import threading
 from typing import ClassVar
 
+from clarion.multiagent.booking_fastpath import BookingFastPath
 from clarion.multiagent.specialists.base import Specialist
 from clarion.multiagent.state import SpecialistIntent
+
+# Lazily-trained module-level singleton — cheap to train (<1 s),
+# deterministic, and shared across all specialist instances so the
+# first call in a process pays the training cost once.
+_fastpath: BookingFastPath | None = None
+_fastpath_lock = threading.Lock()
+
+
+def _get_fastpath() -> BookingFastPath:
+    global _fastpath
+    if _fastpath is None:
+        with _fastpath_lock:
+            if _fastpath is None:
+                _fastpath = BookingFastPath.train_default()
+    return _fastpath
 
 
 class BookingSpecialist(Specialist):
@@ -42,3 +59,11 @@ class BookingSpecialist(Specialist):
         "tool will reject anything that doesn't look like a real name, "
         "phone number, or email."
     )
+
+    def _build_system_prompt(self, *, user_message: str) -> str:
+        """Base prompt + optional fast-path hint from the classifier."""
+        base = super()._build_system_prompt(user_message=user_message)
+        hint = _get_fastpath().hint_for(user_message)
+        if hint:
+            return f"{base}\n\n{hint}"
+        return base
