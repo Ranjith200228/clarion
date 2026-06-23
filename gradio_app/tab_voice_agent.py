@@ -104,7 +104,19 @@ def build(client: VoiceClient | None = None) -> VoiceAgentTab:
     """
     api = client or VoiceClient()
 
-    gr.Markdown(_HEADER_TEXT)
+    from gradio_app import components as c
+
+    gr.HTML(
+        c.page_intro(
+            title="Voice Agent",
+            what=(
+                "Voice in, voice out — end-to-end conversation with "
+                "the agent. Tap record, speak, tap stop, the reply "
+                "plays back automatically."
+            ),
+            quote="Real voice. Real reasoning. Real fast.",
+        )
+    )
     state = gr.State(value=VoiceAgentState())
     metrics_md = gr.Markdown(
         "_Tap record, talk, tap stop - the turn submits and the reply "

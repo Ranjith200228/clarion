@@ -41,12 +41,13 @@ def build_html(flow: AgentFlowSnapshot) -> str:
         return empty_html(tenant=flow.tenant)
     return (
         '<div class="clarion-stack" style="gap: 24px;">'
-        + _section_title(
+        + c.page_intro(
             title="Agent Flow",
-            subtitle=(
-                f"How the multi-agent graph handled "
-                f"{_esc(flow.scenario_id)} for {_esc(flow.tenant)}"
+            what=(
+                "Live trace through the multi-agent graph that "
+                "handled this conversation."
             ),
+            quote="Many minds. One conversation.",
         )
         + _turn_header(flow)
         + _flow_diagram(flow)
@@ -76,9 +77,13 @@ def empty_html(*, tenant: str = "this customer") -> str:
     )
     return (
         '<div class="clarion-stack" style="gap: 24px;">'
-        + _section_title(
+        + c.page_intro(
             title="Agent Flow",
-            subtitle="Hierarchical router -> specialist -> supervisor visualization",
+            what=(
+                "Live trace through the multi-agent graph that "
+                "handled this conversation."
+            ),
+            quote="Many minds. One conversation.",
         )
         + c.panel(title="Awaiting Data", body_html=body)
         + "</div>"

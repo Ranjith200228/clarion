@@ -45,12 +45,13 @@ def build_html(snap: Patient360Snapshot) -> str:
     selected = snap.selected
     return (
         '<div class="clarion-stack" style="gap: 20px;">'
-        + _section_title(
+        + c.page_intro(
             title="Patient 360",
-            subtitle=(
-                f"Unified longitudinal record · "
-                f"{_esc(snap.customer_id)} tenant"
+            what=(
+                "Every fact this tenant knows about a patient — "
+                "chart, history, payer, care team, appointments."
             ),
+            quote="Care, in context.",
         )
         + _picker(snap.patients, selected)
         + _profile_card(selected)
@@ -78,9 +79,13 @@ def empty_html() -> str:
     )
     return (
         '<div class="clarion-stack" style="gap: 20px;">'
-        + _section_title(
+        + c.page_intro(
             title="Patient 360",
-            subtitle="Unified longitudinal record",
+            what=(
+                "Every fact this tenant knows about a patient — "
+                "chart, history, payer, care team, appointments."
+            ),
+            quote="Care, in context.",
         )
         + c.panel(title="Roster", body_html=body)
         + "</div>"

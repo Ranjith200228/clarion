@@ -52,12 +52,13 @@ def build_html(ops: SentinelOpsSnapshot) -> str:
 
     return (
         '<div class="clarion-stack" style="gap: 24px;">'
-        + _section_title(
-            title="Sentinel Operations Center",
-            subtitle=(
-                f"Trust posture for {_esc(ops.tenant)} "
-                f"({ops.sample_count} sampled turns)"
+        + c.page_intro(
+            title="Sentinel Operations",
+            what=(
+                "Per-trace verdicts from the trust engine — "
+                "what passed, what was caught, why."
             ),
+            quote="Every decision shows its work.",
         )
         + _headline_strip(ops)
         + '<div class="clarion-row" style="align-items: stretch; gap: 16px;">'
@@ -89,9 +90,13 @@ def empty_html(*, tenant: str = "this customer") -> str:
     )
     return (
         '<div class="clarion-stack" style="gap: 24px;">'
-        + _section_title(
-            title="Sentinel Operations Center",
-            subtitle="Trust engine — guardrails, judge, escalation scorer, audit",
+        + c.page_intro(
+            title="Sentinel Operations",
+            what=(
+                "Per-trace verdicts from the trust engine — "
+                "what passed, what was caught, why."
+            ),
+            quote="Every decision shows its work.",
         )
         + c.panel(title="Awaiting Data", body_html=body)
         + "</div>"

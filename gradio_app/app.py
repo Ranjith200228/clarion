@@ -121,7 +121,6 @@ def build_app() -> gr.Blocks:
             choices=customers,
             value=default_customer,
             label="Customer",
-            info="Switch tenant context.",
         )
 
         # ---------- Main canvas ----------

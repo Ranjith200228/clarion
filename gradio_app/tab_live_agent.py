@@ -52,10 +52,18 @@ def build(client: AgentClient | None = None) -> LiveAgentTab:
     """
     backend = client or AgentClient()
 
-    gr.Markdown(
-        "## Live Agent\n\n"
-        "Talk to Clarion. The agent's tool calls, escalation score, "
-        "and running cost are surfaced below after each turn."
+    from gradio_app import components as c
+
+    gr.HTML(
+        c.page_intro(
+            title="Live Agent",
+            what=(
+                "Chat with the same LangGraph agent your operators "
+                "trust in production. Each turn shows tool calls, "
+                "escalation score, and running cost."
+            ),
+            quote="Try the agent your operators trust.",
+        )
     )
 
     state = gr.State(LiveAgentState())

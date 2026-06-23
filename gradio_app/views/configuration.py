@@ -29,12 +29,13 @@ def build_html(customer_id: str) -> str:
 
     return (
         '<div class="clarion-stack" style="gap: 20px;">'
-        + _section_title(
+        + c.page_intro(
             title="Configuration",
-            subtitle=(
-                f"Tenant YAML drives the platform · "
-                f"{_esc(customer_id)}"
+            what=(
+                "How this tenant is wired — identity, tools, "
+                "escalation thresholds, agent persona."
             ),
+            quote="Tune the platform without writing code.",
         )
         + _identity_panel(cfg)
         + '<div class="clarion-row" style="align-items: stretch; gap: 16px;">'
@@ -63,9 +64,13 @@ def empty_html(*, detail: str = "") -> str:
     body += "</div>"
     return (
         '<div class="clarion-stack" style="gap: 20px;">'
-        + _section_title(
+        + c.page_intro(
             title="Configuration",
-            subtitle="Tenant YAML driver",
+            what=(
+                "How this tenant is wired — identity, tools, "
+                "escalation thresholds, agent persona."
+            ),
+            quote="Tune the platform without writing code.",
         )
         + c.panel(title="Status", body_html=body)
         + "</div>"

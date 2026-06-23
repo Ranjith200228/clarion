@@ -41,9 +41,10 @@ def build_html(
     """
     return (
         '<div class="clarion-stack" style="gap: 24px;">'
-        + _section_title(
+        + c.page_intro(
             title="Mission Control",
-            subtitle="Real-time health across every tenant",
+            what="Cross-tenant operational health rolled up to a single glance.",
+            quote="If it matters, it surfaces here.",
         )
         + _kpi_strip(kpis)
         + _comparative_strip(snapshots)
@@ -88,9 +89,10 @@ def empty_html() -> str:
     )
     return (
         '<div class="clarion-stack" style="gap: 24px;">'
-        + _section_title(
+        + c.page_intro(
             title="Mission Control",
-            subtitle="Real-time health across every tenant",
+            what="Cross-tenant operational health rolled up to a single glance.",
+            quote="If it matters, it surfaces here.",
         )
         + c.panel(title="Awaiting Data", body_html=body)
         + "</div>"

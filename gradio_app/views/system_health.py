@@ -29,6 +29,11 @@ from gradio_app.data_sources import (
 def build_html(snap: SystemHealthSnapshot) -> str:
     return (
         '<div class="clarion-stack" style="gap: 20px;">'
+        + c.page_intro(
+            title="System Health",
+            what="Every subsystem's status, latency, and last heartbeat.",
+            quote="Trust starts with what you can verify.",
+        )
         + _header(snap)
         + _subsystem_panel(snap.subsystems)
         + _resource_panel(snap.resources)

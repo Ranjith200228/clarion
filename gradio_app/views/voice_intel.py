@@ -46,12 +46,13 @@ def build_html(vi: VoiceIntelligenceSnapshot) -> str:
         return _empty_with_pipeline(vi)
     return (
         '<div class="clarion-stack" style="gap: 24px;">'
-        + _section_title(
+        + c.page_intro(
             title="Voice Intelligence",
-            subtitle=(
-                f"Emotion -> escalation signal for {_esc(vi.tenant)} "
-                f"({vi.total_turns} turns)"
+            what=(
+                "Frustration, emotion, and escalation signals "
+                "lifted from voice transcripts."
             ),
+            quote="Hear what the data is saying.",
         )
         + _headline_strip(vi)
         + '<div class="clarion-row" style="align-items: stretch; gap: 16px;">'
@@ -86,9 +87,13 @@ def _empty_with_pipeline(vi: VoiceIntelligenceSnapshot) -> str:
     )
     return (
         '<div class="clarion-stack" style="gap: 24px;">'
-        + _section_title(
+        + c.page_intro(
             title="Voice Intelligence",
-            subtitle="Emotion analytics, frustration trace, escalation prediction",
+            what=(
+                "Frustration, emotion, and escalation signals "
+                "lifted from voice transcripts."
+            ),
+            quote="Hear what the data is saying.",
         )
         + c.panel(title="Awaiting Data", body_html=body)
         + '<div class="clarion-row" style="align-items: stretch; gap: 16px;">'

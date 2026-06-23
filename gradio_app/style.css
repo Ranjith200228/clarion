@@ -1369,3 +1369,67 @@
         filter: none;
     }
 }
+
+
+/* ============================================================
+ * Page intro — every tab opens with one of these
+ *
+ * Layout:
+ *   ┌────────────────────────────────────────────────────────┐
+ *   │  TITLE  ┊  "confident italic quote about the service"  │
+ *   │  one-sentence plain-English description of the page    │
+ *   └────────────────────────────────────────────────────────┘
+ * The vertical bar between title and quote is a thin accent
+ * strip that picks up the per-tenant color. ============= */
+.clarion-page-intro {
+    padding: var(--sp-3) var(--sp-4);
+    margin-bottom: var(--sp-4);
+    background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--c-accent) 6%, var(--c-bg-panel)) 0%,
+        var(--c-bg-panel) 70%
+    );
+    border: 1px solid var(--c-border);
+    border-left: 3px solid var(--c-accent);
+    border-radius: var(--r-lg);
+    animation: clarion-standout-arrive 380ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.clarion-page-intro-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+.clarion-page-intro-title {
+    font-size: var(--fs-xl);
+    font-weight: var(--fw-bold);
+    color: var(--c-text-strong);
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+}
+.clarion-page-intro-divider {
+    width: 2px;
+    height: 18px;
+    background: var(--c-accent);
+    opacity: 0.5;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+.clarion-page-intro-quote {
+    font-style: italic;
+    color: var(--c-accent);
+    font-size: var(--fs-sm);
+    letter-spacing: 0.01em;
+    opacity: 0.92;
+}
+.clarion-page-intro-what {
+    font-size: var(--fs-sm);
+    color: var(--c-text-muted);
+    line-height: 1.45;
+    max-width: 76ch;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .clarion-page-intro { animation: none !important; }
+}

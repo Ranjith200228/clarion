@@ -38,6 +38,37 @@ def _esc(text: str) -> str:
     return _html.escape(text, quote=True)
 
 
+# ---------- Page intro ----------
+
+
+def page_intro(*, title: str, what: str, quote: str) -> str:
+    """Shared per-tab intro block.
+
+    Each tab in the shell renders one of these at the very top so an
+    operator who lands cold knows three things in five seconds:
+
+    - ``title``  — the name of the page (mirrors the tab label).
+    - ``what``   — one sentence on what this page actually shows.
+                   Friendly, not jargon-heavy.
+    - ``quote``  — a confident, italic affirmation that sells the
+                   service this page represents. Short. Aspirational.
+
+    The HTML wraps everything in ``.clarion-page-intro``; styling
+    sits in style.css §"Page intro". The intro animates in via the
+    standout entrance keyframe so it feels alive on every render.
+    """
+    return (
+        '<div class="clarion-page-intro">'
+        '<div class="clarion-page-intro-row">'
+        f'<div class="clarion-page-intro-title">{_esc(title)}</div>'
+        '<div class="clarion-page-intro-divider"></div>'
+        f'<div class="clarion-page-intro-quote">&ldquo;{_esc(quote)}&rdquo;</div>'
+        "</div>"
+        f'<div class="clarion-page-intro-what">{_esc(what)}</div>'
+        "</div>"
+    )
+
+
 # ---------- KPI tile ----------
 
 

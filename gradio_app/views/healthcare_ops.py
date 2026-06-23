@@ -43,12 +43,13 @@ def build_html(ops: HealthcareOpsSnapshot) -> str:
     """
     return (
         '<div class="clarion-stack" style="gap: 24px;">'
-        + _section_title(
+        + c.page_intro(
             title="Healthcare Operations",
-            subtitle=(
-                f"Provider availability, no-show risk, PMS queue, and "
-                f"eligibility coverage for {_esc(ops.tenant)}"
+            what=(
+                "Bookings, no-shows, escalations, revenue recovered — "
+                "the domain rollup."
             ),
+            quote="Where front-line meets the front office.",
         )
         + _headline_strip(ops)
         + _provider_heatmap_panel(ops)

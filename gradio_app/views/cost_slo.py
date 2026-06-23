@@ -30,9 +30,10 @@ from gradio_app.data_sources import (
 def build_html(rollup: GlobalCostSLO) -> str:
     return (
         '<div class="clarion-stack" style="gap: 24px;">'
-        + _section_title(
+        + c.page_intro(
             title="Cost & SLO",
-            subtitle="Operational cost ledger and latency budget",
+            what="Per-tenant spend, latency, and SLA evidence.",
+            quote="Speed, savings, and an audit trail.",
         )
         + _kpi_strip(rollup)
         + '<div class="clarion-row" style="align-items: stretch; gap: 16px;">'
@@ -57,9 +58,10 @@ def empty_html() -> str:
     )
     return (
         '<div class="clarion-stack" style="gap: 24px;">'
-        + _section_title(
+        + c.page_intro(
             title="Cost & SLO",
-            subtitle="Operational cost ledger and latency budget",
+            what="Per-tenant spend, latency, and SLA evidence.",
+            quote="Speed, savings, and an audit trail.",
         )
         + c.panel(title="Awaiting Traces", body_html=body)
         + "</div>"
