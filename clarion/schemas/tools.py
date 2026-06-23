@@ -27,6 +27,15 @@ from clarion.schemas.domain import (
 
 TaskPriority = Literal["normal", "urgent"]
 
+# Pydantic regex for "looks like an identifier" — must start with a
+# letter, then letters/digits/underscores/dashes, max 64 chars. This
+# rejects free-form text the LLM might hallucinate into an ID slot
+# (e.g. a patient's full name with spaces), which previously slipped
+# straight into the structured store and corrupted downstream views.
+# Update only with a careful migration — the orthopedics db has had
+# at least one row wiped by this guard before.
+_ID_PATTERN = r"^[A-Za-z][A-Za-z0-9_\-]{0,63}$"
+
 
 class ToolOutput(BaseModel):
     """Base for every tool's output. Tools never raise to the agent — they
@@ -62,8 +71,8 @@ class SearchSlotsOutput(ToolOutput):
 class BookAppointmentInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    slot_id: str = Field(min_length=1)
-    patient_id: str = Field(min_length=1)
+    slot_id: str = Field(min_length=1, pattern=_ID_PATTERN)
+    patient_id: str = Field(min_length=1, pattern=_ID_PATTERN)
     notes: str | None = Field(default=None, max_length=2000)
 
 
@@ -77,7 +86,7 @@ class BookAppointmentOutput(ToolOutput):
 class CancelAppointmentInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    appointment_id: str = Field(min_length=1)
+    appointment_id: str = Field(min_length=1, pattern=_ID_PATTERN)
 
 
 class CancelAppointmentOutput(ToolOutput):
@@ -90,7 +99,7 @@ class CancelAppointmentOutput(ToolOutput):
 class CheckEligibilityInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    patient_id: str = Field(min_length=1)
+    patient_id: str = Field(min_length=1, pattern=_ID_PATTERN)
 
 
 class CheckEligibilityOutput(ToolOutput):
