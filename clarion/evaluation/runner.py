@@ -22,12 +22,13 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
+from clarion.agents.llm import LLMClient
 from clarion.config import Settings, load_customer
 from clarion.pipelines.structured import StructuredStore
 from clarion.rag.builder import load_customer_retriever
 from clarion.rag.retriever import Retriever
 from clarion.schemas import EvaluationReport, HarnessReport, Scenario, TraceReport
-from clarion.simulator.harness import load_scenarios, run_scripted
+from clarion.simulator.harness import load_scenarios, run_live, run_scripted
 
 log = logging.getLogger(__name__)
 
@@ -62,23 +63,28 @@ def run_evaluation(
     *,
     settings: Settings,
     mode: str = "scripted",
+    llm_client: LLMClient | None = None,
 ) -> EvaluationReport:
     """Load personas + structured store + retriever, run the harness,
     return the ``EvaluationReport``.
 
-    Pure scripted mode for now; live mode is reachable by calling
-    ``clarion.simulator.harness.run_live`` then
-    ``clarion.evaluation.reporter.build_report`` directly.
+    ``mode="scripted"`` (default) drives the harness with a per-scenario
+    ``FakeLLM`` so the run is deterministic and free. ``mode="live"``
+    drives every scenario through the supplied ``llm_client`` (typically
+    ``OpenAIClient``) so the resulting report carries real cost,
+    latency, and token numbers.
     """
-    if mode != "scripted":
-        raise NotImplementedError(
-            f"mode={mode!r} not yet wired into run_evaluation; "
-            f"the CLI exposes only scripted at the moment. Live mode "
-            f"is available via clarion.simulator.harness.run_live() + "
-            f"clarion.evaluation.reporter.build_report() directly."
-        )
+    if mode not in ("scripted", "live"):
+        raise ValueError(f"unknown mode {mode!r} (expected 'scripted' or 'live')")
+    if mode == "live" and llm_client is None:
+        raise ValueError("mode='live' requires llm_client")
 
-    scenarios, harness_report, traces_path = _execute_pipeline(customer_id, settings=settings)
+    scenarios, harness_report, traces_path = _execute_pipeline(
+        customer_id,
+        settings=settings,
+        mode=mode,
+        llm_client=llm_client,
+    )
 
     # Lazy imports to break the runner -> reporter -> metrics circular
     # potential. The reporter / trace_report import metric helpers but
@@ -103,6 +109,7 @@ def run_and_write_artifacts(
     settings: Settings,
     out_dir: Path,
     mode: str = "scripted",
+    llm_client: LLMClient | None = None,
 ) -> EvaluationArtifacts:
     """Run the harness and write BOTH Phase 13 output files to ``out_dir``.
 
@@ -111,12 +118,20 @@ def run_and_write_artifacts(
       <out_dir>/trace_<customer_id>.json
 
     Returns an EvaluationArtifacts carrying both written paths so
-    callers (the CLI in commit 6) can echo them.
+    callers (the CLI in commit 6) can echo them. Live mode requires
+    ``llm_client``; the scripted path stays free + deterministic.
     """
-    if mode != "scripted":
-        raise NotImplementedError(f"mode={mode!r} not yet wired into run_and_write_artifacts.")
+    if mode not in ("scripted", "live"):
+        raise ValueError(f"unknown mode {mode!r} (expected 'scripted' or 'live')")
+    if mode == "live" and llm_client is None:
+        raise ValueError("mode='live' requires llm_client")
 
-    scenarios, harness_report, traces_path = _execute_pipeline(customer_id, settings=settings)
+    scenarios, harness_report, traces_path = _execute_pipeline(
+        customer_id,
+        settings=settings,
+        mode=mode,
+        llm_client=llm_client,
+    )
 
     from clarion.evaluation.reporter import build_report, write_report
     from clarion.evaluation.trace_report import (
@@ -153,12 +168,17 @@ def run_and_write_artifacts(
 
 
 def _execute_pipeline(
-    customer_id: str, *, settings: Settings
+    customer_id: str,
+    *,
+    settings: Settings,
+    mode: str = "scripted",
+    llm_client: LLMClient | None = None,
 ) -> tuple[list[Scenario], HarnessReport, Path]:
     """Run the harness for one customer; return scenarios + report + traces path.
 
     Exposed as a private helper so callers that want to build a custom
-    report (e.g. with a live LLM) can reuse the load / run path.
+    report (e.g. with a live LLM) can reuse the load / run path. Live
+    mode requires ``llm_client``; scripted mode ignores it.
     """
     customer = load_customer(customer_id, settings=settings)
     structured = StructuredStore.for_customer(customer.customer_id, settings.data_dir)
@@ -174,15 +194,31 @@ def _execute_pipeline(
     personas_path = settings.data_dir / "personas" / f"{customer_id}.json"
     scenarios = load_scenarios(personas_path)
 
-    # Module M1 — pipe the data_dir through so the harness can drive
-    # the writer when ``customer.modules.pms_writeback`` is True.
-    harness_report = run_scripted(
-        scenarios,
-        customer_config=customer,
-        structured=structured,
-        retriever=retriever,
-        writeback_data_dir=settings.data_dir,
-    )
+    if mode == "live":
+        assert llm_client is not None
+        log.info(
+            "running %r in LIVE mode against %s scenarios",
+            customer_id,
+            len(scenarios),
+        )
+        harness_report = run_live(
+            scenarios,
+            customer_config=customer,
+            structured=structured,
+            retriever=retriever,
+            llm_client=llm_client,
+            writeback_data_dir=settings.data_dir,
+        )
+    else:
+        # Module M1 — pipe the data_dir through so the harness can drive
+        # the writer when ``customer.modules.pms_writeback`` is True.
+        harness_report = run_scripted(
+            scenarios,
+            customer_config=customer,
+            structured=structured,
+            retriever=retriever,
+            writeback_data_dir=settings.data_dir,
+        )
 
     traces_path = settings.data_dir / customer_id / "traces.jsonl"
     return scenarios, harness_report, traces_path

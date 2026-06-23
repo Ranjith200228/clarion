@@ -5,6 +5,7 @@ Usage::
     python -m clarion.eval --customer ophthalmology
     python -m clarion.eval --customer orthopedics --out reports/
     python -m clarion.eval --customer all
+    python -m clarion.eval --customer ophthalmology --mode live
 
 Writes two files per customer to ``--out`` (default: the configured
 ``CLARION_DATA_DIR / <customer_id>``):
@@ -14,12 +15,20 @@ Writes two files per customer to ``--out`` (default: the configured
 
 The report file is the locked Phase 13 contract that the Phase 14
 Gradio UI consumes. The trace file feeds the Trace Explorer tab.
+
+``--mode scripted`` (default) drives every scenario with a per-scenario
+``FakeLLM``: deterministic, free, CI-safe. ``--mode live`` drives every
+scenario through ``OpenAIClient`` so the resulting report carries real
+cost, latency, and token numbers. Live mode requires ``OPENAI_API_KEY``
+in the environment and spends real API budget &mdash; the CLI prints a
+warning + cost estimate before starting.
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -55,20 +64,41 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--mode",
-        choices=["scripted"],  # live mode wires in via the library API for now
+        choices=["scripted", "live"],
         default="scripted",
-        help="Evaluation mode (scripted = FakeLLM, deterministic).",
+        help=(
+            "Evaluation mode. scripted = FakeLLM (deterministic, free, "
+            "CI-safe). live = OpenAIClient with real API calls and real "
+            "numbers in the report (requires OPENAI_API_KEY; costs ~$0.50 "
+            "per customer)."
+        ),
+    )
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip the live-mode cost confirmation prompt.",
     )
     args = parser.parse_args(argv)
     settings = get_settings()
 
     customers = list(TEMPLATES) if args.customer == "all" else [args.customer]
+
+    llm_client = None
+    if args.mode == "live":
+        llm_client = _build_live_client(customers, skip_prompt=args.yes)
+        if llm_client is None:
+            return 1
+
     exit_code = 0
     for customer_id in customers:
         out_dir = args.out if args.out is not None else settings.data_dir / customer_id
         try:
             artifacts = run_and_write_artifacts(
-                customer_id, settings=settings, out_dir=out_dir, mode=args.mode
+                customer_id,
+                settings=settings,
+                out_dir=out_dir,
+                mode=args.mode,
+                llm_client=llm_client,
             )
         except FileNotFoundError as e:
             print(f"error: {e}", file=sys.stderr)
@@ -77,6 +107,42 @@ def main(argv: list[str] | None = None) -> int:
         _summarize(artifacts.report.customer_id, artifacts)
 
     return exit_code
+
+
+def _build_live_client(customers: list[str], *, skip_prompt: bool):  # type: ignore[no-untyped-def]
+    """Build an ``OpenAIClient`` after a cost confirmation gate.
+
+    Returns ``None`` if the user declines or ``OPENAI_API_KEY`` is missing.
+    Lazy-imports the OpenAI client so scripted runs don't pay the SDK
+    import cost.
+    """
+    if not os.environ.get("OPENAI_API_KEY"):
+        print(
+            "error: --mode live requires OPENAI_API_KEY in the environment.",
+            file=sys.stderr,
+        )
+        return None
+
+    n = len(customers) * 100  # 100 scenarios per customer
+    print(
+        f"\n  Live-mode evaluation will run {n} scenarios across "
+        f"{len(customers)} customer(s) through real OpenAI API calls.\n"
+        f"  Estimated cost: ~${0.50 * len(customers):.2f} (gpt-4o-mini).\n"
+        f"  This produces a report with real cost, latency, and token "
+        f"numbers.\n"
+    )
+    if not skip_prompt:
+        try:
+            ack = input("Continue? [y/N] ").strip().lower()
+        except EOFError:
+            ack = ""
+        if ack not in ("y", "yes"):
+            print("aborted.", file=sys.stderr)
+            return None
+
+    from clarion.agents.openai_client import OpenAIClient
+
+    return OpenAIClient()
 
 
 def _summarize(customer_id: str, artifacts) -> None:  # type: ignore[no-untyped-def]
