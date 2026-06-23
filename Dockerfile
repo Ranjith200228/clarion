@@ -54,6 +54,9 @@ COPY configs ./configs
 COPY data ./data
 COPY scripts ./scripts
 
+# Patch gradio_client/utils.py to handle Pydantic 2.x bool JSON schemas.
+RUN /app/.venv/bin/python scripts/patch_gradio_client.py
+
 # Pre-bake per-customer FAISS + SQLite artifacts so the runtime image
 # starts with everything ready. Without this the first /chat call would
 # block on a slow first-time index build.
