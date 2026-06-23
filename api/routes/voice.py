@@ -94,11 +94,37 @@ def voice_turn(request: Request, body: VoiceTurnRequest) -> VoiceTurnResponse:
             detail={"detail": str(e), "code": "customer_config_invalid"},
         ) from e
 
-    result: VoiceTurnResponse = orchestrator.turn(
-        agent,
-        audio_in,
-        customer_id=body.customer_id,
-        session_id=body.session_id,
-        sample_rate_hz=body.audio_metadata.sample_rate_hz,
-    )
+    try:
+        result: VoiceTurnResponse = orchestrator.turn(
+            agent,
+            audio_in,
+            customer_id=body.customer_id,
+            session_id=body.session_id,
+            sample_rate_hz=body.audio_metadata.sample_rate_hz,
+        )
+    except Exception as exc:
+        exc_name = type(exc).__name__
+        # OpenAI auth / quota errors mean the key is missing or invalid —
+        # treat them the same as "no orchestrator configured" so the Gradio
+        # UI shows the polished demo bubble instead of a raw error.
+        if exc_name in {"AuthenticationError", "PermissionDeniedError", "RateLimitError"}:
+            log.warning("voice: OpenAI key issue (%s): %s", exc_name, exc)
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "detail": (
+                        f"voice OpenAI key unavailable ({exc_name}) — "
+                        "set OPENAI_API_KEY in the Space secrets to enable live voice"
+                    ),
+                    "code": "voice_not_configured",
+                },
+            ) from exc
+        log.exception("voice turn failed for customer=%r session=%r", body.customer_id, body.session_id)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "detail": f"voice turn failed: {exc_name}: {exc}",
+                "code": "voice_turn_error",
+            },
+        ) from exc
     return result
