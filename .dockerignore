@@ -46,12 +46,8 @@ data/orthopedics/rules_meta.json
 data/*/audit.jsonl
 data/*/traces.jsonl
 
-# --- Local eval reports (built fresh per run) ---
+# --- Local dev reports directory (not committed) ---
 reports/
-data/ophthalmology/report_*.json
-data/ophthalmology/trace_*.json
-data/orthopedics/report_*.json
-data/orthopedics/trace_*.json
 
 # --- Local dev secrets ---
 .env
