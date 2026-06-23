@@ -1433,3 +1433,174 @@
 @media (prefers-reduced-motion: reduce) {
     .clarion-page-intro { animation: none !important; }
 }
+
+
+/* ============================================================
+ * Cost & SLO — invoice OCR widget
+ *
+ * Sits below the static cost rollup. The header reads as a sub-
+ * section; the result card uses the same accent + animation
+ * language as Today's Standout so the OCR output feels like a
+ * peer of the other dashboard panels, not a bolted-on form.
+ * ============================================================ */
+.clarion-ocr-header {
+    margin-top: var(--sp-4);
+    padding: var(--sp-3) 0 var(--sp-2);
+    border-top: 1px solid var(--c-border);
+}
+.clarion-ocr-eyebrow {
+    font-size: var(--fs-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--c-accent);
+    font-weight: var(--fw-semibold);
+    margin-bottom: 4px;
+}
+.clarion-ocr-headline {
+    font-size: var(--fs-lg);
+    font-weight: var(--fw-bold);
+    color: var(--c-text-strong);
+    margin-bottom: 2px;
+}
+.clarion-ocr-sub {
+    font-size: var(--fs-sm);
+    color: var(--c-text-muted);
+}
+
+.clarion-ocr-empty {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: var(--sp-4);
+    background: var(--c-bg-subtle);
+    border: 1px dashed var(--c-border);
+    border-radius: var(--r-lg);
+    color: var(--c-text-muted);
+    font-size: var(--fs-sm);
+}
+.clarion-ocr-empty-glyph {
+    font-size: 28px;
+    color: var(--c-accent);
+    opacity: 0.7;
+}
+.clarion-ocr-empty-text { line-height: 1.45; max-width: 60ch; }
+
+.clarion-ocr-result {
+    padding: var(--sp-4);
+    background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--c-accent) 6%, var(--c-bg-panel)) 0%,
+        var(--c-bg-panel) 70%
+    );
+    border: 1px solid var(--c-border);
+    border-left: 3px solid var(--c-accent);
+    border-radius: var(--r-lg);
+    animation: clarion-standout-arrive 380ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.clarion-ocr-result-header {
+    margin-bottom: var(--sp-3);
+}
+.clarion-ocr-result-source {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    flex-wrap: wrap;
+}
+.clarion-ocr-pill {
+    background: color-mix(in srgb, var(--c-accent) 18%, transparent);
+    color: var(--c-accent);
+    font-weight: var(--fw-semibold);
+    font-size: var(--fs-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 2px 10px;
+    border-radius: 999px;
+}
+.clarion-ocr-source-name {
+    color: var(--c-text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+}
+
+.clarion-ocr-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.clarion-ocr-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 8px 12px;
+    background: var(--c-bg-subtle);
+    border-radius: var(--r-md);
+    font-size: var(--fs-sm);
+}
+.clarion-ocr-row-label { color: var(--c-text-primary); }
+.clarion-ocr-row-value {
+    font-family: var(--font-mono);
+    font-weight: var(--fw-semibold);
+    color: var(--c-text-strong);
+    font-variant-numeric: tabular-nums;
+}
+.clarion-ocr-total-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 12px 14px;
+    margin-top: 6px;
+    background: color-mix(in srgb, var(--c-accent) 8%, var(--c-bg-panel));
+    border: 1px solid color-mix(in srgb, var(--c-accent) 30%, transparent);
+    border-radius: var(--r-md);
+    font-size: var(--fs-md);
+}
+.clarion-ocr-total-label {
+    color: var(--c-text-strong);
+    font-weight: var(--fw-semibold);
+}
+.clarion-ocr-total-source {
+    color: var(--c-text-muted);
+    font-weight: var(--fw-regular);
+    font-size: var(--fs-xs);
+}
+.clarion-ocr-total-value {
+    font-family: var(--font-mono);
+    font-weight: var(--fw-bold);
+    color: var(--c-accent);
+    font-variant-numeric: tabular-nums;
+}
+
+.clarion-ocr-raw {
+    margin-top: var(--sp-3);
+    font-size: var(--fs-xs);
+    color: var(--c-text-muted);
+}
+.clarion-ocr-raw summary {
+    cursor: pointer;
+    padding: 6px 0;
+    user-select: none;
+}
+.clarion-ocr-raw summary:hover { color: var(--c-accent); }
+.clarion-ocr-raw-pre {
+    margin: 4px 0 0;
+    padding: 10px 12px;
+    background: var(--c-bg-subtle);
+    border-radius: var(--r-md);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--c-text-primary);
+    white-space: pre-wrap;
+    max-height: 200px;
+    overflow: auto;
+}
+
+.clarion-ocr-error {
+    border-left-color: var(--c-warning);
+    background: color-mix(in srgb, var(--c-warning) 8%, var(--c-bg-panel));
+}
+.clarion-ocr-error-title {
+    font-weight: var(--fw-bold);
+    color: var(--c-warning);
+    margin-bottom: 4px;
+}
+.clarion-ocr-error-body { color: var(--c-text-muted); font-size: var(--fs-sm); }

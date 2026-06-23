@@ -41,6 +41,7 @@ from gradio_app import (
     components,
     data,
     data_sources,
+    tab_cost_ocr,
     tab_live_agent,
     tab_voice_agent,
 )
@@ -150,6 +151,13 @@ def build_app() -> gr.Blocks:
                 p360_html = gr.HTML(_render_patient_360(default_customer))
             with gr.Tab("Cost & SLO"):
                 cs_html = gr.HTML(_render_cost_slo())
+                # OCR invoice extractor sits below the cost rollup.
+                # Self-contained: the upload + button + result panel
+                # all live in tab_cost_ocr.build() so app.py stays
+                # focused on the shell wiring. The returned handles
+                # are not held - the click handler is wired inside
+                # build() so the components manage themselves.
+                tab_cost_ocr.build()
             # ---- HEALTHCARE OPS section ----
             with gr.Tab("Healthcare Ops"):
                 ho_html = gr.HTML(_render_healthcare_ops(default_customer))
