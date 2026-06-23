@@ -735,7 +735,7 @@ def main() -> int:
     demo = build_app()
     host = os.environ.get("GRADIO_HOST", "0.0.0.0")
     port = int(os.environ.get("GRADIO_PORT", "7860"))
-    demo.launch(server_name=host, server_port=port)
+    demo.launch(server_name=host, server_port=port, show_api=False)
     return 0
 
 
