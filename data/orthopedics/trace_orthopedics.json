@@ -1,12 +1,12 @@
 {
   "schema_version": "1.0.0",
   "customer_id": "orthopedics",
-  "generated_at": "2026-06-23T18:38:11.899026Z",
+  "generated_at": "2026-06-23T19:08:25.477165Z",
   "entries": [
     {
       "scenario_id": "orthopedics_clear_book_001",
       "customer_id": "orthopedics",
-      "trace_id": "trace_a5e1ebcc413f",
+      "trace_id": "trace_65e8ff4864be",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -32,7 +32,7 @@
     {
       "scenario_id": "orthopedics_clear_book_002",
       "customer_id": "orthopedics",
-      "trace_id": "trace_951e51df42ae",
+      "trace_id": "trace_09b795100e03",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -58,7 +58,7 @@
     {
       "scenario_id": "orthopedics_clear_book_003",
       "customer_id": "orthopedics",
-      "trace_id": "trace_6c7c88222ed3",
+      "trace_id": "trace_54708ce7121d",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -84,7 +84,7 @@
     {
       "scenario_id": "orthopedics_clear_book_004",
       "customer_id": "orthopedics",
-      "trace_id": "trace_e5382a125cd5",
+      "trace_id": "trace_2f09e6d7f230",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -110,7 +110,7 @@
     {
       "scenario_id": "orthopedics_clear_book_005",
       "customer_id": "orthopedics",
-      "trace_id": "trace_97211f190973",
+      "trace_id": "trace_c2d70119c0b2",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -136,7 +136,7 @@
     {
       "scenario_id": "orthopedics_clear_book_006",
       "customer_id": "orthopedics",
-      "trace_id": "trace_7ef599b47952",
+      "trace_id": "trace_fd9c6ae26254",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -162,7 +162,7 @@
     {
       "scenario_id": "orthopedics_clear_book_007",
       "customer_id": "orthopedics",
-      "trace_id": "trace_08c76da70245",
+      "trace_id": "trace_955005f3d261",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -188,7 +188,7 @@
     {
       "scenario_id": "orthopedics_clear_book_008",
       "customer_id": "orthopedics",
-      "trace_id": "trace_7673972fd4a7",
+      "trace_id": "trace_11141d38ca3d",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -214,7 +214,7 @@
     {
       "scenario_id": "orthopedics_clear_book_009",
       "customer_id": "orthopedics",
-      "trace_id": "trace_a2fd114e5e92",
+      "trace_id": "trace_00debfe3e0fd",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -240,7 +240,7 @@
     {
       "scenario_id": "orthopedics_clear_book_010",
       "customer_id": "orthopedics",
-      "trace_id": "trace_1d5979f91807",
+      "trace_id": "trace_8c9c02436db6",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -266,7 +266,7 @@
     {
       "scenario_id": "orthopedics_clear_book_011",
       "customer_id": "orthopedics",
-      "trace_id": "trace_82b73c76ce11",
+      "trace_id": "trace_d3798e34b3b6",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -292,7 +292,7 @@
     {
       "scenario_id": "orthopedics_clear_book_012",
       "customer_id": "orthopedics",
-      "trace_id": "trace_d5f1854aa41f",
+      "trace_id": "trace_0581bd421b19",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -318,7 +318,7 @@
     {
       "scenario_id": "orthopedics_clear_book_013",
       "customer_id": "orthopedics",
-      "trace_id": "trace_566cd76435f2",
+      "trace_id": "trace_b8139e24ce5a",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -344,7 +344,7 @@
     {
       "scenario_id": "orthopedics_clear_book_014",
       "customer_id": "orthopedics",
-      "trace_id": "trace_85c86a097382",
+      "trace_id": "trace_7ba11a89464c",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -370,7 +370,7 @@
     {
       "scenario_id": "orthopedics_clear_book_015",
       "customer_id": "orthopedics",
-      "trace_id": "trace_b448c36b47d6",
+      "trace_id": "trace_3211f3816695",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -396,7 +396,7 @@
     {
       "scenario_id": "orthopedics_clear_book_016",
       "customer_id": "orthopedics",
-      "trace_id": "trace_9d436541c745",
+      "trace_id": "trace_f51cc1626010",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -422,7 +422,7 @@
     {
       "scenario_id": "orthopedics_clear_book_017",
       "customer_id": "orthopedics",
-      "trace_id": "trace_15dd33a22569",
+      "trace_id": "trace_b130df64290a",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -448,7 +448,7 @@
     {
       "scenario_id": "orthopedics_clear_book_018",
       "customer_id": "orthopedics",
-      "trace_id": "trace_2d86ac0d4bf0",
+      "trace_id": "trace_17cc79d82f7e",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -474,7 +474,7 @@
     {
       "scenario_id": "orthopedics_clear_book_019",
       "customer_id": "orthopedics",
-      "trace_id": "trace_767aa339b236",
+      "trace_id": "trace_e5e1e2e1c432",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -500,7 +500,7 @@
     {
       "scenario_id": "orthopedics_clear_book_020",
       "customer_id": "orthopedics",
-      "trace_id": "trace_b913d2a2a0c0",
+      "trace_id": "trace_65af5267a3ab",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -526,7 +526,7 @@
     {
       "scenario_id": "orthopedics_clear_book_021",
       "customer_id": "orthopedics",
-      "trace_id": "trace_1c107d1d3c19",
+      "trace_id": "trace_8b3913b38e99",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -552,7 +552,7 @@
     {
       "scenario_id": "orthopedics_clear_book_022",
       "customer_id": "orthopedics",
-      "trace_id": "trace_1d7b3c874137",
+      "trace_id": "trace_2670aed14905",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -578,7 +578,7 @@
     {
       "scenario_id": "orthopedics_clear_book_023",
       "customer_id": "orthopedics",
-      "trace_id": "trace_5c188e724e92",
+      "trace_id": "trace_9b07f21a4cd2",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -604,7 +604,7 @@
     {
       "scenario_id": "orthopedics_clear_book_024",
       "customer_id": "orthopedics",
-      "trace_id": "trace_0a9477f361da",
+      "trace_id": "trace_3a15d70518c7",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -630,7 +630,7 @@
     {
       "scenario_id": "orthopedics_clear_book_025",
       "customer_id": "orthopedics",
-      "trace_id": "trace_24299ebf1f48",
+      "trace_id": "trace_d4808c49d266",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -656,7 +656,7 @@
     {
       "scenario_id": "orthopedics_clear_cancel_001",
       "customer_id": "orthopedics",
-      "trace_id": "trace_6e8b8163e8a1",
+      "trace_id": "trace_f5cfcfba2c6f",
       "difficulty": "clear",
       "intent": "cancel",
       "agent_replies": [
@@ -683,7 +683,7 @@
     {
       "scenario_id": "orthopedics_clear_cancel_002",
       "customer_id": "orthopedics",
-      "trace_id": "trace_6066c410404b",
+      "trace_id": "trace_9cdeb07d00d2",
       "difficulty": "clear",
       "intent": "cancel",
       "agent_replies": [
@@ -710,7 +710,7 @@
     {
       "scenario_id": "orthopedics_clear_cancel_003",
       "customer_id": "orthopedics",
-      "trace_id": "trace_151494ebf8e2",
+      "trace_id": "trace_95b1fcb43f6d",
       "difficulty": "clear",
       "intent": "cancel",
       "agent_replies": [
@@ -737,7 +737,7 @@
     {
       "scenario_id": "orthopedics_clear_cancel_004",
       "customer_id": "orthopedics",
-      "trace_id": "trace_a608f7a87d7a",
+      "trace_id": "trace_8fd972596a71",
       "difficulty": "clear",
       "intent": "cancel",
       "agent_replies": [
@@ -764,7 +764,7 @@
     {
       "scenario_id": "orthopedics_clear_cancel_005",
       "customer_id": "orthopedics",
-      "trace_id": "trace_8a24c3915a01",
+      "trace_id": "trace_d197bdec9190",
       "difficulty": "clear",
       "intent": "cancel",
       "agent_replies": [
@@ -791,7 +791,7 @@
     {
       "scenario_id": "orthopedics_clear_cancel_006",
       "customer_id": "orthopedics",
-      "trace_id": "trace_09c6fd9b3c37",
+      "trace_id": "trace_84b365c9d486",
       "difficulty": "clear",
       "intent": "cancel",
       "agent_replies": [
@@ -818,7 +818,7 @@
     {
       "scenario_id": "orthopedics_clear_cancel_007",
       "customer_id": "orthopedics",
-      "trace_id": "trace_0c9cacd428d0",
+      "trace_id": "trace_e69b9d2a75c3",
       "difficulty": "clear",
       "intent": "cancel",
       "agent_replies": [
@@ -845,7 +845,7 @@
     {
       "scenario_id": "orthopedics_clear_cancel_008",
       "customer_id": "orthopedics",
-      "trace_id": "trace_b25299cefea9",
+      "trace_id": "trace_86234829bc14",
       "difficulty": "clear",
       "intent": "cancel",
       "agent_replies": [
@@ -872,7 +872,7 @@
     {
       "scenario_id": "orthopedics_clear_reschedule_001",
       "customer_id": "orthopedics",
-      "trace_id": "trace_b0f89b806254",
+      "trace_id": "trace_4ebe34177654",
       "difficulty": "clear",
       "intent": "reschedule",
       "agent_replies": [
@@ -902,7 +902,7 @@
     {
       "scenario_id": "orthopedics_clear_reschedule_002",
       "customer_id": "orthopedics",
-      "trace_id": "trace_4e018bb9a006",
+      "trace_id": "trace_b73d2b3e5070",
       "difficulty": "clear",
       "intent": "reschedule",
       "agent_replies": [
@@ -932,7 +932,7 @@
     {
       "scenario_id": "orthopedics_clear_reschedule_003",
       "customer_id": "orthopedics",
-      "trace_id": "trace_8db2bee58030",
+      "trace_id": "trace_b4efeb44496f",
       "difficulty": "clear",
       "intent": "reschedule",
       "agent_replies": [
@@ -962,7 +962,7 @@
     {
       "scenario_id": "orthopedics_clear_reschedule_004",
       "customer_id": "orthopedics",
-      "trace_id": "trace_965880eefc6c",
+      "trace_id": "trace_1b8bb05a3487",
       "difficulty": "clear",
       "intent": "reschedule",
       "agent_replies": [
@@ -992,7 +992,7 @@
     {
       "scenario_id": "orthopedics_clear_reschedule_005",
       "customer_id": "orthopedics",
-      "trace_id": "trace_496f1b6eaa27",
+      "trace_id": "trace_037de243af5b",
       "difficulty": "clear",
       "intent": "reschedule",
       "agent_replies": [
@@ -1022,7 +1022,7 @@
     {
       "scenario_id": "orthopedics_clear_reschedule_006",
       "customer_id": "orthopedics",
-      "trace_id": "trace_e16d6e140af2",
+      "trace_id": "trace_f30a3ae29897",
       "difficulty": "clear",
       "intent": "reschedule",
       "agent_replies": [
@@ -1052,7 +1052,7 @@
     {
       "scenario_id": "orthopedics_clear_reschedule_007",
       "customer_id": "orthopedics",
-      "trace_id": "trace_880504f2763e",
+      "trace_id": "trace_19f3db947312",
       "difficulty": "clear",
       "intent": "reschedule",
       "agent_replies": [
@@ -1082,7 +1082,7 @@
     {
       "scenario_id": "orthopedics_clear_reschedule_008",
       "customer_id": "orthopedics",
-      "trace_id": "trace_90ef170b203b",
+      "trace_id": "trace_af1ad6500c7e",
       "difficulty": "clear",
       "intent": "reschedule",
       "agent_replies": [
@@ -1112,7 +1112,7 @@
     {
       "scenario_id": "orthopedics_clear_eligibility_001",
       "customer_id": "orthopedics",
-      "trace_id": "trace_866765dc9814",
+      "trace_id": "trace_f1be1e00bb2b",
       "difficulty": "clear",
       "intent": "eligibility",
       "agent_replies": [
@@ -1137,7 +1137,7 @@
     {
       "scenario_id": "orthopedics_clear_eligibility_002",
       "customer_id": "orthopedics",
-      "trace_id": "trace_65f04315cab4",
+      "trace_id": "trace_1fcb856e9dc6",
       "difficulty": "clear",
       "intent": "eligibility",
       "agent_replies": [
@@ -1162,7 +1162,7 @@
     {
       "scenario_id": "orthopedics_clear_eligibility_003",
       "customer_id": "orthopedics",
-      "trace_id": "trace_833d5a6413e4",
+      "trace_id": "trace_1357fe5e9178",
       "difficulty": "clear",
       "intent": "eligibility",
       "agent_replies": [
@@ -1187,7 +1187,7 @@
     {
       "scenario_id": "orthopedics_clear_eligibility_004",
       "customer_id": "orthopedics",
-      "trace_id": "trace_b831b6b05942",
+      "trace_id": "trace_eaf3a74b5413",
       "difficulty": "clear",
       "intent": "eligibility",
       "agent_replies": [
@@ -1212,7 +1212,7 @@
     {
       "scenario_id": "orthopedics_clear_eligibility_005",
       "customer_id": "orthopedics",
-      "trace_id": "trace_62fec11c9952",
+      "trace_id": "trace_f68cf1c70db2",
       "difficulty": "clear",
       "intent": "eligibility",
       "agent_replies": [
@@ -1237,7 +1237,7 @@
     {
       "scenario_id": "orthopedics_clear_eligibility_006",
       "customer_id": "orthopedics",
-      "trace_id": "trace_4a2a778ec0ff",
+      "trace_id": "trace_cbd5c1ed38b0",
       "difficulty": "clear",
       "intent": "eligibility",
       "agent_replies": [
@@ -1262,7 +1262,7 @@
     {
       "scenario_id": "orthopedics_clear_eligibility_007",
       "customer_id": "orthopedics",
-      "trace_id": "trace_0fb04f2fc355",
+      "trace_id": "trace_4e5b52148ff1",
       "difficulty": "clear",
       "intent": "eligibility",
       "agent_replies": [
@@ -1287,7 +1287,7 @@
     {
       "scenario_id": "orthopedics_clear_eligibility_008",
       "customer_id": "orthopedics",
-      "trace_id": "trace_f4c56e858878",
+      "trace_id": "trace_7a8633aea747",
       "difficulty": "clear",
       "intent": "eligibility",
       "agent_replies": [
@@ -1312,7 +1312,7 @@
     {
       "scenario_id": "orthopedics_clear_faq_001",
       "customer_id": "orthopedics",
-      "trace_id": "trace_8ffa20308981",
+      "trace_id": "trace_69ecfaa94ef8",
       "difficulty": "clear",
       "intent": "faq",
       "agent_replies": [
@@ -1335,7 +1335,7 @@
     {
       "scenario_id": "orthopedics_clear_faq_002",
       "customer_id": "orthopedics",
-      "trace_id": "trace_754ca9c9b22f",
+      "trace_id": "trace_4ff48ea8a676",
       "difficulty": "clear",
       "intent": "faq",
       "agent_replies": [
@@ -1358,7 +1358,7 @@
     {
       "scenario_id": "orthopedics_clear_faq_003",
       "customer_id": "orthopedics",
-      "trace_id": "trace_399deb4dddd6",
+      "trace_id": "trace_3c043699467e",
       "difficulty": "clear",
       "intent": "faq",
       "agent_replies": [
@@ -1381,7 +1381,7 @@
     {
       "scenario_id": "orthopedics_clear_faq_004",
       "customer_id": "orthopedics",
-      "trace_id": "trace_1a764e54f00c",
+      "trace_id": "trace_47ae2fb18945",
       "difficulty": "clear",
       "intent": "faq",
       "agent_replies": [
@@ -1404,7 +1404,7 @@
     {
       "scenario_id": "orthopedics_clear_faq_005",
       "customer_id": "orthopedics",
-      "trace_id": "trace_f5fea295792d",
+      "trace_id": "trace_111d9d2644e4",
       "difficulty": "clear",
       "intent": "faq",
       "agent_replies": [
@@ -1427,7 +1427,7 @@
     {
       "scenario_id": "orthopedics_clear_faq_006",
       "customer_id": "orthopedics",
-      "trace_id": "trace_cd07765441f1",
+      "trace_id": "trace_0afe572d8638",
       "difficulty": "clear",
       "intent": "faq",
       "agent_replies": [
@@ -1450,7 +1450,7 @@
     {
       "scenario_id": "orthopedics_clear_faq_007",
       "customer_id": "orthopedics",
-      "trace_id": "trace_d762351c2593",
+      "trace_id": "trace_0ddb53ecea2b",
       "difficulty": "clear",
       "intent": "faq",
       "agent_replies": [
@@ -1473,7 +1473,7 @@
     {
       "scenario_id": "orthopedics_clear_faq_008",
       "customer_id": "orthopedics",
-      "trace_id": "trace_e26417051c02",
+      "trace_id": "trace_8d6924efb497",
       "difficulty": "clear",
       "intent": "faq",
       "agent_replies": [
@@ -1496,7 +1496,7 @@
     {
       "scenario_id": "orthopedics_clear_faq_009",
       "customer_id": "orthopedics",
-      "trace_id": "trace_5ad0d0b27dd2",
+      "trace_id": "trace_0cd831dd810c",
       "difficulty": "clear",
       "intent": "faq",
       "agent_replies": [
@@ -1519,7 +1519,7 @@
     {
       "scenario_id": "orthopedics_clear_faq_010",
       "customer_id": "orthopedics",
-      "trace_id": "trace_bac9851a2c8a",
+      "trace_id": "trace_83ee29963695",
       "difficulty": "clear",
       "intent": "faq",
       "agent_replies": [
@@ -1542,7 +1542,7 @@
     {
       "scenario_id": "orthopedics_ambiguous_book_001",
       "customer_id": "orthopedics",
-      "trace_id": "trace_e96ab75cede6",
+      "trace_id": "trace_bf530c3ea936",
       "difficulty": "ambiguous",
       "intent": "book",
       "agent_replies": [
@@ -1565,7 +1565,7 @@
     {
       "scenario_id": "orthopedics_ambiguous_book_002",
       "customer_id": "orthopedics",
-      "trace_id": "trace_6fd3c102571b",
+      "trace_id": "trace_c5f2075572a9",
       "difficulty": "ambiguous",
       "intent": "book",
       "agent_replies": [
@@ -1588,7 +1588,7 @@
     {
       "scenario_id": "orthopedics_ambiguous_book_003",
       "customer_id": "orthopedics",
-      "trace_id": "trace_b01393f0a312",
+      "trace_id": "trace_ff33f9fd1dd3",
       "difficulty": "ambiguous",
       "intent": "book",
       "agent_replies": [
@@ -1611,7 +1611,7 @@
     {
       "scenario_id": "orthopedics_ambiguous_book_004",
       "customer_id": "orthopedics",
-      "trace_id": "trace_3e92107d6e39",
+      "trace_id": "trace_29f4c8d62279",
       "difficulty": "ambiguous",
       "intent": "book",
       "agent_replies": [
@@ -1634,7 +1634,7 @@
     {
       "scenario_id": "orthopedics_ambiguous_book_005",
       "customer_id": "orthopedics",
-      "trace_id": "trace_d3efdebbaaf0",
+      "trace_id": "trace_10bdf2dd953a",
       "difficulty": "ambiguous",
       "intent": "book",
       "agent_replies": [
@@ -1657,7 +1657,7 @@
     {
       "scenario_id": "orthopedics_ambiguous_book_006",
       "customer_id": "orthopedics",
-      "trace_id": "trace_daf7ac56c85b",
+      "trace_id": "trace_a7ae9e76baf1",
       "difficulty": "ambiguous",
       "intent": "book",
       "agent_replies": [
@@ -1680,7 +1680,7 @@
     {
       "scenario_id": "orthopedics_ambiguous_book_007",
       "customer_id": "orthopedics",
-      "trace_id": "trace_4e99a5ea0625",
+      "trace_id": "trace_3164640d5eb7",
       "difficulty": "ambiguous",
       "intent": "book",
       "agent_replies": [
@@ -1703,7 +1703,7 @@
     {
       "scenario_id": "orthopedics_ambiguous_book_008",
       "customer_id": "orthopedics",
-      "trace_id": "trace_b34c1df3d989",
+      "trace_id": "trace_6cd9e680b5c0",
       "difficulty": "ambiguous",
       "intent": "book",
       "agent_replies": [
@@ -1726,7 +1726,7 @@
     {
       "scenario_id": "orthopedics_ambiguous_book_009",
       "customer_id": "orthopedics",
-      "trace_id": "trace_4ff1c7719c45",
+      "trace_id": "trace_7fa3ca0d0dbb",
       "difficulty": "ambiguous",
       "intent": "book",
       "agent_replies": [
@@ -1749,7 +1749,7 @@
     {
       "scenario_id": "orthopedics_ambiguous_book_010",
       "customer_id": "orthopedics",
-      "trace_id": "trace_4c28042b498d",
+      "trace_id": "trace_9a090be3f272",
       "difficulty": "ambiguous",
       "intent": "book",
       "agent_replies": [
@@ -1772,7 +1772,7 @@
     {
       "scenario_id": "orthopedics_ambiguous_reschedule_001",
       "customer_id": "orthopedics",
-      "trace_id": "trace_ecbae147a802",
+      "trace_id": "trace_4da7788466dd",
       "difficulty": "ambiguous",
       "intent": "reschedule",
       "agent_replies": [
@@ -1802,7 +1802,7 @@
     {
       "scenario_id": "orthopedics_ambiguous_reschedule_002",
       "customer_id": "orthopedics",
-      "trace_id": "trace_f9545c62de51",
+      "trace_id": "trace_e31458bf8deb",
       "difficulty": "ambiguous",
       "intent": "reschedule",
       "agent_replies": [
@@ -1832,7 +1832,7 @@
     {
       "scenario_id": "orthopedics_ambiguous_reschedule_003",
       "customer_id": "orthopedics",
-      "trace_id": "trace_ceaa312aaced",
+      "trace_id": "trace_9806818f23db",
       "difficulty": "ambiguous",
       "intent": "reschedule",
       "agent_replies": [
@@ -1862,7 +1862,7 @@
     {
       "scenario_id": "orthopedics_ambiguous_reschedule_004",
       "customer_id": "orthopedics",
-      "trace_id": "trace_f0f0fa8015f0",
+      "trace_id": "trace_62593dc91b82",
       "difficulty": "ambiguous",
       "intent": "reschedule",
       "agent_replies": [
@@ -1892,7 +1892,7 @@
     {
       "scenario_id": "orthopedics_ambiguous_reschedule_005",
       "customer_id": "orthopedics",
-      "trace_id": "trace_ad9b71b03d7d",
+      "trace_id": "trace_997e79f6bd14",
       "difficulty": "ambiguous",
       "intent": "reschedule",
       "agent_replies": [
@@ -1922,7 +1922,7 @@
     {
       "scenario_id": "orthopedics_rule_violating_book_001",
       "customer_id": "orthopedics",
-      "trace_id": "trace_a4c21d8a5ec5",
+      "trace_id": "trace_3716de4e2d0b",
       "difficulty": "rule_violating",
       "intent": "book",
       "agent_replies": [
@@ -1949,7 +1949,7 @@
     {
       "scenario_id": "orthopedics_rule_violating_book_002",
       "customer_id": "orthopedics",
-      "trace_id": "trace_71c04f62921a",
+      "trace_id": "trace_4e5329ba69ae",
       "difficulty": "rule_violating",
       "intent": "book",
       "agent_replies": [
@@ -1976,7 +1976,7 @@
     {
       "scenario_id": "orthopedics_rule_violating_book_003",
       "customer_id": "orthopedics",
-      "trace_id": "trace_6a8bdcab83a2",
+      "trace_id": "trace_50a188eac09b",
       "difficulty": "rule_violating",
       "intent": "book",
       "agent_replies": [
@@ -2003,7 +2003,7 @@
     {
       "scenario_id": "orthopedics_rule_violating_book_004",
       "customer_id": "orthopedics",
-      "trace_id": "trace_db065b86e8b8",
+      "trace_id": "trace_3c56894c7bc3",
       "difficulty": "rule_violating",
       "intent": "book",
       "agent_replies": [
@@ -2030,7 +2030,7 @@
     {
       "scenario_id": "orthopedics_rule_violating_book_005",
       "customer_id": "orthopedics",
-      "trace_id": "trace_df316a2ccca4",
+      "trace_id": "trace_765a444e5590",
       "difficulty": "rule_violating",
       "intent": "book",
       "agent_replies": [
@@ -2057,7 +2057,7 @@
     {
       "scenario_id": "orthopedics_rule_violating_book_006",
       "customer_id": "orthopedics",
-      "trace_id": "trace_b9992293d55d",
+      "trace_id": "trace_2bf30d756b96",
       "difficulty": "rule_violating",
       "intent": "book",
       "agent_replies": [
@@ -2084,7 +2084,7 @@
     {
       "scenario_id": "orthopedics_emergency_emergency_001",
       "customer_id": "orthopedics",
-      "trace_id": "trace_f92fa7f433d3",
+      "trace_id": "trace_6e3af58a0980",
       "difficulty": "emergency",
       "intent": "emergency",
       "agent_replies": [
@@ -2109,7 +2109,7 @@
     {
       "scenario_id": "orthopedics_emergency_emergency_002",
       "customer_id": "orthopedics",
-      "trace_id": "trace_7be089b341e6",
+      "trace_id": "trace_6f8fdd1e2118",
       "difficulty": "emergency",
       "intent": "emergency",
       "agent_replies": [
@@ -2134,7 +2134,7 @@
     {
       "scenario_id": "orthopedics_emergency_emergency_003",
       "customer_id": "orthopedics",
-      "trace_id": "trace_ccb4aee30194",
+      "trace_id": "trace_747ebf4828bc",
       "difficulty": "emergency",
       "intent": "emergency",
       "agent_replies": [
@@ -2159,7 +2159,7 @@
     {
       "scenario_id": "orthopedics_emergency_emergency_004",
       "customer_id": "orthopedics",
-      "trace_id": "trace_ebd236e71ac6",
+      "trace_id": "trace_fb6a9bd5a3da",
       "difficulty": "emergency",
       "intent": "emergency",
       "agent_replies": [
@@ -2184,7 +2184,7 @@
     {
       "scenario_id": "orthopedics_emergency_emergency_005",
       "customer_id": "orthopedics",
-      "trace_id": "trace_9a0d9505175e",
+      "trace_id": "trace_ca165b9e9e79",
       "difficulty": "emergency",
       "intent": "emergency",
       "agent_replies": [
@@ -2209,7 +2209,7 @@
     {
       "scenario_id": "orthopedics_emergency_emergency_006",
       "customer_id": "orthopedics",
-      "trace_id": "trace_e6d2995ec939",
+      "trace_id": "trace_af1c3b176bc8",
       "difficulty": "emergency",
       "intent": "emergency",
       "agent_replies": [
@@ -2234,7 +2234,7 @@
     {
       "scenario_id": "orthopedics_emergency_emergency_007",
       "customer_id": "orthopedics",
-      "trace_id": "trace_f3383ecefda7",
+      "trace_id": "trace_58c203bd9af6",
       "difficulty": "emergency",
       "intent": "emergency",
       "agent_replies": [
@@ -2259,7 +2259,7 @@
     {
       "scenario_id": "orthopedics_emergency_emergency_008",
       "customer_id": "orthopedics",
-      "trace_id": "trace_6c48bb6417fb",
+      "trace_id": "trace_b8ef434879fa",
       "difficulty": "emergency",
       "intent": "emergency",
       "agent_replies": [
@@ -2284,7 +2284,7 @@
     {
       "scenario_id": "orthopedics_emergency_emergency_009",
       "customer_id": "orthopedics",
-      "trace_id": "trace_349ffdfb9e12",
+      "trace_id": "trace_d5a7ba26651e",
       "difficulty": "emergency",
       "intent": "emergency",
       "agent_replies": [
@@ -2309,7 +2309,7 @@
     {
       "scenario_id": "orthopedics_emergency_emergency_010",
       "customer_id": "orthopedics",
-      "trace_id": "trace_b7cd36f10dd2",
+      "trace_id": "trace_0958dd4446ef",
       "difficulty": "emergency",
       "intent": "emergency",
       "agent_replies": [
@@ -2334,7 +2334,7 @@
     {
       "scenario_id": "orthopedics_clear_clinical_advice_001",
       "customer_id": "orthopedics",
-      "trace_id": "trace_6b695c1896a1",
+      "trace_id": "trace_951f322c0e23",
       "difficulty": "clear",
       "intent": "clinical_advice",
       "agent_replies": [
@@ -2359,7 +2359,7 @@
     {
       "scenario_id": "orthopedics_clear_clinical_advice_002",
       "customer_id": "orthopedics",
-      "trace_id": "trace_0d92f69a7d93",
+      "trace_id": "trace_a9d229fd1063",
       "difficulty": "clear",
       "intent": "clinical_advice",
       "agent_replies": [
@@ -2384,7 +2384,7 @@
     {
       "scenario_id": "orthopedics_clear_clinical_advice_003",
       "customer_id": "orthopedics",
-      "trace_id": "trace_767f363c64d5",
+      "trace_id": "trace_455d5a4c1e7d",
       "difficulty": "clear",
       "intent": "clinical_advice",
       "agent_replies": [
@@ -2409,7 +2409,7 @@
     {
       "scenario_id": "orthopedics_clear_clinical_advice_004",
       "customer_id": "orthopedics",
-      "trace_id": "trace_fc17fe150f17",
+      "trace_id": "trace_3620feeeca32",
       "difficulty": "clear",
       "intent": "clinical_advice",
       "agent_replies": [
@@ -2434,7 +2434,7 @@
     {
       "scenario_id": "orthopedics_clear_clinical_advice_005",
       "customer_id": "orthopedics",
-      "trace_id": "trace_e3ea0dde1621",
+      "trace_id": "trace_23fb93c08688",
       "difficulty": "clear",
       "intent": "clinical_advice",
       "agent_replies": [
@@ -2459,7 +2459,7 @@
     {
       "scenario_id": "orthopedics_clear_clinical_advice_006",
       "customer_id": "orthopedics",
-      "trace_id": "trace_b9fb3ee9f493",
+      "trace_id": "trace_fdac05342830",
       "difficulty": "clear",
       "intent": "clinical_advice",
       "agent_replies": [
@@ -2484,7 +2484,7 @@
     {
       "scenario_id": "orthopedics_clear_clinical_advice_007",
       "customer_id": "orthopedics",
-      "trace_id": "trace_ed5995d9eda8",
+      "trace_id": "trace_b5ddf3691c5a",
       "difficulty": "clear",
       "intent": "clinical_advice",
       "agent_replies": [
@@ -2509,7 +2509,7 @@
     {
       "scenario_id": "orthopedics_clear_clinical_advice_008",
       "customer_id": "orthopedics",
-      "trace_id": "trace_b6845af5d5b2",
+      "trace_id": "trace_2a888c902acb",
       "difficulty": "clear",
       "intent": "clinical_advice",
       "agent_replies": [
@@ -2534,7 +2534,7 @@
     {
       "scenario_id": "orthopedics_clear_clinical_advice_009",
       "customer_id": "orthopedics",
-      "trace_id": "trace_bfa6fadfc648",
+      "trace_id": "trace_128ee3e14588",
       "difficulty": "clear",
       "intent": "clinical_advice",
       "agent_replies": [
@@ -2559,7 +2559,7 @@
     {
       "scenario_id": "orthopedics_clear_clinical_advice_010",
       "customer_id": "orthopedics",
-      "trace_id": "trace_724db44c37a4",
+      "trace_id": "trace_e231373322fb",
       "difficulty": "clear",
       "intent": "clinical_advice",
       "agent_replies": [

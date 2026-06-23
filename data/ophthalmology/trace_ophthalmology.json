@@ -1,12 +1,12 @@
 {
   "schema_version": "1.0.0",
   "customer_id": "ophthalmology",
-  "generated_at": "2026-06-23T18:37:51.405492Z",
+  "generated_at": "2026-06-23T19:08:09.813644Z",
   "entries": [
     {
       "scenario_id": "ophthalmology_clear_book_001",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_5e5a74b72994",
+      "trace_id": "trace_f9862df37502",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -32,7 +32,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_002",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_a5327532c75b",
+      "trace_id": "trace_8ff9af28a2d2",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -58,7 +58,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_003",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_1e56193f3c5a",
+      "trace_id": "trace_f48543732479",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -84,7 +84,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_004",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_7f434a806083",
+      "trace_id": "trace_b96f290d71d8",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -110,7 +110,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_005",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_f0c50e54a6fb",
+      "trace_id": "trace_fd33525e7d2b",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -136,7 +136,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_006",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_11390f55e690",
+      "trace_id": "trace_0912b9e5f356",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -162,7 +162,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_007",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_5e519f137dc3",
+      "trace_id": "trace_e5dadcc328cc",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -188,7 +188,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_008",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_0789c46c3bb3",
+      "trace_id": "trace_699eb706e020",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -214,7 +214,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_009",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_d66ee8c846b3",
+      "trace_id": "trace_78174cdda610",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -240,7 +240,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_010",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_663017d63410",
+      "trace_id": "trace_5d2e4f841885",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -266,7 +266,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_011",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_0788e73dd99c",
+      "trace_id": "trace_7f26f11779d7",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -292,7 +292,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_012",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_61d3eee171e5",
+      "trace_id": "trace_8b5187981d30",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -318,7 +318,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_013",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_4c980e415173",
+      "trace_id": "trace_b3d5c4aec02e",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -344,7 +344,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_014",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_794ddaf607f3",
+      "trace_id": "trace_73847c6ae6ac",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -370,7 +370,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_015",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_df6b3a4acc14",
+      "trace_id": "trace_8b2ff353e22e",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -396,7 +396,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_016",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_46d4ca93f311",
+      "trace_id": "trace_cf0ad3c3998f",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -422,7 +422,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_017",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_0498b37947d2",
+      "trace_id": "trace_c21836005284",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -448,7 +448,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_018",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_cc7e9029f310",
+      "trace_id": "trace_056eb6720972",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -474,7 +474,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_019",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_a3de41eeb25e",
+      "trace_id": "trace_97e3c82346f4",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -500,7 +500,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_020",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_a71dc6c03305",
+      "trace_id": "trace_308cf7c5c8af",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -526,7 +526,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_021",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_74079279ed98",
+      "trace_id": "trace_442fefd3c04a",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -552,7 +552,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_022",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_ffb2a67928e8",
+      "trace_id": "trace_b93efc73bf9f",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -578,7 +578,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_023",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_9fd5aa9c14c7",
+      "trace_id": "trace_fe17136d23c7",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -604,7 +604,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_024",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_8aa619b20155",
+      "trace_id": "trace_735592f7af91",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -630,7 +630,7 @@
     {
       "scenario_id": "ophthalmology_clear_book_025",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_1c10b495ae9c",
+      "trace_id": "trace_78f102e5ce4d",
       "difficulty": "clear",
       "intent": "book",
       "agent_replies": [
@@ -656,7 +656,7 @@
     {
       "scenario_id": "ophthalmology_clear_cancel_001",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_73a3a088297d",
+      "trace_id": "trace_067fb785e17b",
       "difficulty": "clear",
       "intent": "cancel",
       "agent_replies": [
@@ -681,7 +681,7 @@
     {
       "scenario_id": "ophthalmology_clear_cancel_002",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_7e32976a9c76",
+      "trace_id": "trace_2ccd1ab41d22",
       "difficulty": "clear",
       "intent": "cancel",
       "agent_replies": [
@@ -706,7 +706,7 @@
     {
       "scenario_id": "ophthalmology_clear_cancel_003",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_14060ac5c7b2",
+      "trace_id": "trace_7fc9904802c8",
       "difficulty": "clear",
       "intent": "cancel",
       "agent_replies": [
@@ -731,7 +731,7 @@
     {
       "scenario_id": "ophthalmology_clear_cancel_004",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_cfbfc2564c84",
+      "trace_id": "trace_4c3886968611",
       "difficulty": "clear",
       "intent": "cancel",
       "agent_replies": [
@@ -756,7 +756,7 @@
     {
       "scenario_id": "ophthalmology_clear_cancel_005",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_c64cde9a72c3",
+      "trace_id": "trace_4922d4c1a43a",
       "difficulty": "clear",
       "intent": "cancel",
       "agent_replies": [
@@ -781,7 +781,7 @@
     {
       "scenario_id": "ophthalmology_clear_cancel_006",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_1d70f6d56399",
+      "trace_id": "trace_2e55921bf62c",
       "difficulty": "clear",
       "intent": "cancel",
       "agent_replies": [
@@ -806,7 +806,7 @@
     {
       "scenario_id": "ophthalmology_clear_cancel_007",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_2a80eeae665e",
+      "trace_id": "trace_85cd27e0ed55",
       "difficulty": "clear",
       "intent": "cancel",
       "agent_replies": [
@@ -831,7 +831,7 @@
     {
       "scenario_id": "ophthalmology_clear_cancel_008",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_b678d36ce370",
+      "trace_id": "trace_f8721376482b",
       "difficulty": "clear",
       "intent": "cancel",
       "agent_replies": [
@@ -856,7 +856,7 @@
     {
       "scenario_id": "ophthalmology_clear_reschedule_001",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_58cf15f31b8d",
+      "trace_id": "trace_6619713684d3",
       "difficulty": "clear",
       "intent": "reschedule",
       "agent_replies": [
@@ -882,7 +882,7 @@
     {
       "scenario_id": "ophthalmology_clear_reschedule_002",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_863f0a521183",
+      "trace_id": "trace_a63663ab2a68",
       "difficulty": "clear",
       "intent": "reschedule",
       "agent_replies": [
@@ -908,7 +908,7 @@
     {
       "scenario_id": "ophthalmology_clear_reschedule_003",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_1e66aaf81ea6",
+      "trace_id": "trace_4e8d14949a35",
       "difficulty": "clear",
       "intent": "reschedule",
       "agent_replies": [
@@ -934,7 +934,7 @@
     {
       "scenario_id": "ophthalmology_clear_reschedule_004",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_e998c6eb8e65",
+      "trace_id": "trace_213652da5096",
       "difficulty": "clear",
       "intent": "reschedule",
       "agent_replies": [
@@ -960,7 +960,7 @@
     {
       "scenario_id": "ophthalmology_clear_reschedule_005",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_0b8ecb7f47ed",
+      "trace_id": "trace_381069c58062",
       "difficulty": "clear",
       "intent": "reschedule",
       "agent_replies": [
@@ -986,7 +986,7 @@
     {
       "scenario_id": "ophthalmology_clear_reschedule_006",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_4bf2c4b38bba",
+      "trace_id": "trace_d55876c79440",
       "difficulty": "clear",
       "intent": "reschedule",
       "agent_replies": [
@@ -1012,7 +1012,7 @@
     {
       "scenario_id": "ophthalmology_clear_reschedule_007",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_07fc817fcaa8",
+      "trace_id": "trace_2f4abc508bac",
       "difficulty": "clear",
       "intent": "reschedule",
       "agent_replies": [
@@ -1038,7 +1038,7 @@
     {
       "scenario_id": "ophthalmology_clear_reschedule_008",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_7dea63beab5e",
+      "trace_id": "trace_ae6f4af40837",
       "difficulty": "clear",
       "intent": "reschedule",
       "agent_replies": [
@@ -1064,7 +1064,7 @@
     {
       "scenario_id": "ophthalmology_clear_eligibility_001",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_a384043371f8",
+      "trace_id": "trace_8bba664b5087",
       "difficulty": "clear",
       "intent": "eligibility",
       "agent_replies": [
@@ -1089,7 +1089,7 @@
     {
       "scenario_id": "ophthalmology_clear_eligibility_002",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_b963b5e97841",
+      "trace_id": "trace_ee6af03e4b80",
       "difficulty": "clear",
       "intent": "eligibility",
       "agent_replies": [
@@ -1114,7 +1114,7 @@
     {
       "scenario_id": "ophthalmology_clear_eligibility_003",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_09a76f9b862a",
+      "trace_id": "trace_5bc9fd0be0aa",
       "difficulty": "clear",
       "intent": "eligibility",
       "agent_replies": [
@@ -1139,7 +1139,7 @@
     {
       "scenario_id": "ophthalmology_clear_eligibility_004",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_00bb69175bb6",
+      "trace_id": "trace_99ddd568bfbf",
       "difficulty": "clear",
       "intent": "eligibility",
       "agent_replies": [
@@ -1164,7 +1164,7 @@
     {
       "scenario_id": "ophthalmology_clear_eligibility_005",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_10b12a452afa",
+      "trace_id": "trace_6b9724311607",
       "difficulty": "clear",
       "intent": "eligibility",
       "agent_replies": [
@@ -1189,7 +1189,7 @@
     {
       "scenario_id": "ophthalmology_clear_eligibility_006",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_d71b802be097",
+      "trace_id": "trace_e8047756b0e1",
       "difficulty": "clear",
       "intent": "eligibility",
       "agent_replies": [
@@ -1214,7 +1214,7 @@
     {
       "scenario_id": "ophthalmology_clear_eligibility_007",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_974c6b29abcf",
+      "trace_id": "trace_734ccbf538e3",
       "difficulty": "clear",
       "intent": "eligibility",
       "agent_replies": [
@@ -1239,7 +1239,7 @@
     {
       "scenario_id": "ophthalmology_clear_eligibility_008",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_6aa09f8e57de",
+      "trace_id": "trace_b2134a2c4b26",
       "difficulty": "clear",
       "intent": "eligibility",
       "agent_replies": [
@@ -1264,7 +1264,7 @@
     {
       "scenario_id": "ophthalmology_clear_faq_001",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_2475b6e92222",
+      "trace_id": "trace_4b213bff0149",
       "difficulty": "clear",
       "intent": "faq",
       "agent_replies": [
@@ -1287,7 +1287,7 @@
     {
       "scenario_id": "ophthalmology_clear_faq_002",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_b52df5e939b9",
+      "trace_id": "trace_4a752210e2d5",
       "difficulty": "clear",
       "intent": "faq",
       "agent_replies": [
@@ -1310,7 +1310,7 @@
     {
       "scenario_id": "ophthalmology_clear_faq_003",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_d8ae8de7acb5",
+      "trace_id": "trace_764e0fd07e13",
       "difficulty": "clear",
       "intent": "faq",
       "agent_replies": [
@@ -1333,7 +1333,7 @@
     {
       "scenario_id": "ophthalmology_clear_faq_004",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_5d92c9d2cef8",
+      "trace_id": "trace_2298b9d1d994",
       "difficulty": "clear",
       "intent": "faq",
       "agent_replies": [
@@ -1356,7 +1356,7 @@
     {
       "scenario_id": "ophthalmology_clear_faq_005",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_f90f38090fcc",
+      "trace_id": "trace_51e68aec4c49",
       "difficulty": "clear",
       "intent": "faq",
       "agent_replies": [
@@ -1379,7 +1379,7 @@
     {
       "scenario_id": "ophthalmology_clear_faq_006",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_0cf5d57a808e",
+      "trace_id": "trace_bbc5c87bb822",
       "difficulty": "clear",
       "intent": "faq",
       "agent_replies": [
@@ -1402,7 +1402,7 @@
     {
       "scenario_id": "ophthalmology_clear_faq_007",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_52ff96a7ede2",
+      "trace_id": "trace_26765f6d1325",
       "difficulty": "clear",
       "intent": "faq",
       "agent_replies": [
@@ -1425,7 +1425,7 @@
     {
       "scenario_id": "ophthalmology_clear_faq_008",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_4864be736775",
+      "trace_id": "trace_4bcac6cf0f32",
       "difficulty": "clear",
       "intent": "faq",
       "agent_replies": [
@@ -1448,7 +1448,7 @@
     {
       "scenario_id": "ophthalmology_clear_faq_009",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_2ebd2fe49728",
+      "trace_id": "trace_a5322540cf05",
       "difficulty": "clear",
       "intent": "faq",
       "agent_replies": [
@@ -1471,7 +1471,7 @@
     {
       "scenario_id": "ophthalmology_clear_faq_010",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_5079f0228982",
+      "trace_id": "trace_4dc66ca1acdb",
       "difficulty": "clear",
       "intent": "faq",
       "agent_replies": [
@@ -1494,7 +1494,7 @@
     {
       "scenario_id": "ophthalmology_ambiguous_book_001",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_221d2368df1a",
+      "trace_id": "trace_f20dd84894c2",
       "difficulty": "ambiguous",
       "intent": "book",
       "agent_replies": [
@@ -1517,7 +1517,7 @@
     {
       "scenario_id": "ophthalmology_ambiguous_book_002",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_386bda8bdb96",
+      "trace_id": "trace_af58c79e4658",
       "difficulty": "ambiguous",
       "intent": "book",
       "agent_replies": [
@@ -1540,7 +1540,7 @@
     {
       "scenario_id": "ophthalmology_ambiguous_book_003",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_94cdefc37208",
+      "trace_id": "trace_4f5d536d10a7",
       "difficulty": "ambiguous",
       "intent": "book",
       "agent_replies": [
@@ -1563,7 +1563,7 @@
     {
       "scenario_id": "ophthalmology_ambiguous_book_004",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_1e477d65a092",
+      "trace_id": "trace_242e2c32b0b3",
       "difficulty": "ambiguous",
       "intent": "book",
       "agent_replies": [
@@ -1586,7 +1586,7 @@
     {
       "scenario_id": "ophthalmology_ambiguous_book_005",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_b173341c998c",
+      "trace_id": "trace_4eda7d523652",
       "difficulty": "ambiguous",
       "intent": "book",
       "agent_replies": [
@@ -1609,7 +1609,7 @@
     {
       "scenario_id": "ophthalmology_ambiguous_book_006",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_2ccfa21f5d63",
+      "trace_id": "trace_522c2b746c71",
       "difficulty": "ambiguous",
       "intent": "book",
       "agent_replies": [
@@ -1632,7 +1632,7 @@
     {
       "scenario_id": "ophthalmology_ambiguous_book_007",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_40afb6987838",
+      "trace_id": "trace_6c49c9f61bee",
       "difficulty": "ambiguous",
       "intent": "book",
       "agent_replies": [
@@ -1655,7 +1655,7 @@
     {
       "scenario_id": "ophthalmology_ambiguous_book_008",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_e4a2ca3641c9",
+      "trace_id": "trace_25c0c06a1ee4",
       "difficulty": "ambiguous",
       "intent": "book",
       "agent_replies": [
@@ -1678,7 +1678,7 @@
     {
       "scenario_id": "ophthalmology_ambiguous_book_009",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_1d06c090c1bb",
+      "trace_id": "trace_e26e2fc5a6ea",
       "difficulty": "ambiguous",
       "intent": "book",
       "agent_replies": [
@@ -1701,7 +1701,7 @@
     {
       "scenario_id": "ophthalmology_ambiguous_book_010",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_174abc535151",
+      "trace_id": "trace_31b9c02493a1",
       "difficulty": "ambiguous",
       "intent": "book",
       "agent_replies": [
@@ -1724,7 +1724,7 @@
     {
       "scenario_id": "ophthalmology_ambiguous_reschedule_001",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_b77d544c21c4",
+      "trace_id": "trace_3b6f3837b75d",
       "difficulty": "ambiguous",
       "intent": "reschedule",
       "agent_replies": [
@@ -1750,7 +1750,7 @@
     {
       "scenario_id": "ophthalmology_ambiguous_reschedule_002",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_cd46c9fdbf00",
+      "trace_id": "trace_213e35581dac",
       "difficulty": "ambiguous",
       "intent": "reschedule",
       "agent_replies": [
@@ -1776,7 +1776,7 @@
     {
       "scenario_id": "ophthalmology_ambiguous_reschedule_003",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_8e34f232922d",
+      "trace_id": "trace_f41618699a41",
       "difficulty": "ambiguous",
       "intent": "reschedule",
       "agent_replies": [
@@ -1802,7 +1802,7 @@
     {
       "scenario_id": "ophthalmology_ambiguous_reschedule_004",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_a594c0ed27cc",
+      "trace_id": "trace_d9a6cdd68508",
       "difficulty": "ambiguous",
       "intent": "reschedule",
       "agent_replies": [
@@ -1828,7 +1828,7 @@
     {
       "scenario_id": "ophthalmology_ambiguous_reschedule_005",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_c13bac3dd900",
+      "trace_id": "trace_0fa0dc1f1634",
       "difficulty": "ambiguous",
       "intent": "reschedule",
       "agent_replies": [
@@ -1854,7 +1854,7 @@
     {
       "scenario_id": "ophthalmology_rule_violating_book_001",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_cfca71f3c322",
+      "trace_id": "trace_cffb30d092a8",
       "difficulty": "rule_violating",
       "intent": "book",
       "agent_replies": [
@@ -1881,7 +1881,7 @@
     {
       "scenario_id": "ophthalmology_rule_violating_book_002",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_7a1937e0cb7e",
+      "trace_id": "trace_667d292b17e5",
       "difficulty": "rule_violating",
       "intent": "book",
       "agent_replies": [
@@ -1908,7 +1908,7 @@
     {
       "scenario_id": "ophthalmology_rule_violating_book_003",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_318d3ebb8416",
+      "trace_id": "trace_f83d2cb99d6a",
       "difficulty": "rule_violating",
       "intent": "book",
       "agent_replies": [
@@ -1935,7 +1935,7 @@
     {
       "scenario_id": "ophthalmology_rule_violating_book_004",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_7b4f44044188",
+      "trace_id": "trace_07234d214b00",
       "difficulty": "rule_violating",
       "intent": "book",
       "agent_replies": [
@@ -1962,7 +1962,7 @@
     {
       "scenario_id": "ophthalmology_rule_violating_book_005",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_5101dd46e70d",
+      "trace_id": "trace_ec1520cd8f8d",
       "difficulty": "rule_violating",
       "intent": "book",
       "agent_replies": [
@@ -1989,7 +1989,7 @@
     {
       "scenario_id": "ophthalmology_rule_violating_book_006",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_ca55226b5360",
+      "trace_id": "trace_31a1e5644058",
       "difficulty": "rule_violating",
       "intent": "book",
       "agent_replies": [
@@ -2016,7 +2016,7 @@
     {
       "scenario_id": "ophthalmology_emergency_emergency_001",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_4adbd6e02b41",
+      "trace_id": "trace_8ef8c818b511",
       "difficulty": "emergency",
       "intent": "emergency",
       "agent_replies": [
@@ -2041,7 +2041,7 @@
     {
       "scenario_id": "ophthalmology_emergency_emergency_002",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_5915fdd32a2e",
+      "trace_id": "trace_bf59970997c7",
       "difficulty": "emergency",
       "intent": "emergency",
       "agent_replies": [
@@ -2066,7 +2066,7 @@
     {
       "scenario_id": "ophthalmology_emergency_emergency_003",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_6466768e6f76",
+      "trace_id": "trace_93408f80e6ca",
       "difficulty": "emergency",
       "intent": "emergency",
       "agent_replies": [
@@ -2091,7 +2091,7 @@
     {
       "scenario_id": "ophthalmology_emergency_emergency_004",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_f2a13c93b825",
+      "trace_id": "trace_e2592df7e750",
       "difficulty": "emergency",
       "intent": "emergency",
       "agent_replies": [
@@ -2116,7 +2116,7 @@
     {
       "scenario_id": "ophthalmology_emergency_emergency_005",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_bd7af8b851eb",
+      "trace_id": "trace_826eb1576a24",
       "difficulty": "emergency",
       "intent": "emergency",
       "agent_replies": [
@@ -2141,7 +2141,7 @@
     {
       "scenario_id": "ophthalmology_emergency_emergency_006",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_9c23a5766ce9",
+      "trace_id": "trace_eca6c102b31b",
       "difficulty": "emergency",
       "intent": "emergency",
       "agent_replies": [
@@ -2166,7 +2166,7 @@
     {
       "scenario_id": "ophthalmology_emergency_emergency_007",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_6fa59cee38b9",
+      "trace_id": "trace_ab67ff95fecb",
       "difficulty": "emergency",
       "intent": "emergency",
       "agent_replies": [
@@ -2191,7 +2191,7 @@
     {
       "scenario_id": "ophthalmology_emergency_emergency_008",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_4cb5ecc56ad2",
+      "trace_id": "trace_4afd657c824a",
       "difficulty": "emergency",
       "intent": "emergency",
       "agent_replies": [
@@ -2216,7 +2216,7 @@
     {
       "scenario_id": "ophthalmology_emergency_emergency_009",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_72b1ee6f190c",
+      "trace_id": "trace_dd2e5ba0410b",
       "difficulty": "emergency",
       "intent": "emergency",
       "agent_replies": [
@@ -2241,7 +2241,7 @@
     {
       "scenario_id": "ophthalmology_emergency_emergency_010",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_950ab75c7f0d",
+      "trace_id": "trace_f7189c74f881",
       "difficulty": "emergency",
       "intent": "emergency",
       "agent_replies": [
@@ -2266,7 +2266,7 @@
     {
       "scenario_id": "ophthalmology_clear_clinical_advice_001",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_9ea659d2aaf7",
+      "trace_id": "trace_fbfe56858851",
       "difficulty": "clear",
       "intent": "clinical_advice",
       "agent_replies": [
@@ -2291,7 +2291,7 @@
     {
       "scenario_id": "ophthalmology_clear_clinical_advice_002",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_fbb9b8ecd76e",
+      "trace_id": "trace_6d1ec176f48e",
       "difficulty": "clear",
       "intent": "clinical_advice",
       "agent_replies": [
@@ -2316,7 +2316,7 @@
     {
       "scenario_id": "ophthalmology_clear_clinical_advice_003",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_8e58796e9c87",
+      "trace_id": "trace_84f648a9fa8a",
       "difficulty": "clear",
       "intent": "clinical_advice",
       "agent_replies": [
@@ -2341,7 +2341,7 @@
     {
       "scenario_id": "ophthalmology_clear_clinical_advice_004",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_4253df319cd9",
+      "trace_id": "trace_8e691744e008",
       "difficulty": "clear",
       "intent": "clinical_advice",
       "agent_replies": [
@@ -2366,7 +2366,7 @@
     {
       "scenario_id": "ophthalmology_clear_clinical_advice_005",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_83b22a38f555",
+      "trace_id": "trace_0a18c6ce00c4",
       "difficulty": "clear",
       "intent": "clinical_advice",
       "agent_replies": [
@@ -2391,7 +2391,7 @@
     {
       "scenario_id": "ophthalmology_clear_clinical_advice_006",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_26a9456e2d14",
+      "trace_id": "trace_202bf03309f8",
       "difficulty": "clear",
       "intent": "clinical_advice",
       "agent_replies": [
@@ -2416,7 +2416,7 @@
     {
       "scenario_id": "ophthalmology_clear_clinical_advice_007",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_12284f608c68",
+      "trace_id": "trace_c3e7f962fded",
       "difficulty": "clear",
       "intent": "clinical_advice",
       "agent_replies": [
@@ -2441,7 +2441,7 @@
     {
       "scenario_id": "ophthalmology_clear_clinical_advice_008",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_736f52dac457",
+      "trace_id": "trace_08eba774974c",
       "difficulty": "clear",
       "intent": "clinical_advice",
       "agent_replies": [
@@ -2466,7 +2466,7 @@
     {
       "scenario_id": "ophthalmology_clear_clinical_advice_009",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_655ba289297d",
+      "trace_id": "trace_fb1aac01c026",
       "difficulty": "clear",
       "intent": "clinical_advice",
       "agent_replies": [
@@ -2491,7 +2491,7 @@
     {
       "scenario_id": "ophthalmology_clear_clinical_advice_010",
       "customer_id": "ophthalmology",
-      "trace_id": "trace_a958fa02be84",
+      "trace_id": "trace_123f8e00c490",
       "difficulty": "clear",
       "intent": "clinical_advice",
       "agent_replies": [

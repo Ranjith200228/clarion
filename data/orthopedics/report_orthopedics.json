@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "customer_id": "orthopedics",
-  "generated_at": "2026-06-23T18:38:11.896496Z",
+  "generated_at": "2026-06-23T19:08:25.475658Z",
   "scenario_count": 100,
   "pass_rate": 1.0,
   "metrics": {
