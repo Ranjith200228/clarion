@@ -43,6 +43,29 @@ def build_html(snap: Patient360Snapshot) -> str:
     if not snap.patients or snap.selected is None:
         return empty_html()
     selected = snap.selected
+
+    # Pre-render every patient's profile section in its own div.
+    # Only the initially-selected one is visible; clicking a chip
+    # in the picker swaps visibility entirely in JS — no Gradio
+    # round-trip, no page reload.
+    profiles = ""
+    for p in snap.patients:
+        is_visible = p.patient_id == selected.patient_id
+        display = "" if is_visible else "display:none;"
+        profiles += (
+            f'<div id="clarion-p360-profile-{_esc(p.patient_id)}" '
+            f'class="clarion-stack clarion-p360-profile" '
+            f'style="gap:20px;{display}">'
+            + _profile_card(p)
+            + '<div class="clarion-row" style="align-items:stretch;gap:16px;">'
+            + _care_team_panel(p)
+            + _insurance_panel(p)
+            + "</div>"
+            + _confirmation_panel(p, snap.customer_id)
+            + _timeline_panel(p)
+            + "</div>"
+        )
+
     return (
         '<div class="clarion-stack" style="gap: 20px;">'
         + c.page_intro(
@@ -54,13 +77,7 @@ def build_html(snap: Patient360Snapshot) -> str:
             quote="Care, in context.",
         )
         + _picker(snap.patients, selected)
-        + _profile_card(selected)
-        + '<div class="clarion-row" style="align-items: stretch; gap: 16px;">'
-        + _care_team_panel(selected)
-        + _insurance_panel(selected)
-        + "</div>"
-        + _confirmation_panel(selected, snap.customer_id)
-        + _timeline_panel(selected)
+        + profiles
         + "</div>"
     )
 
@@ -111,17 +128,17 @@ def _picker(
     patients: tuple[PatientProfile, ...],
     selected: PatientProfile,
 ) -> str:
-    """Roster picker with H10 client-side search + payer filter.
+    """Roster picker with client-side search, payer filter, and clickable chips.
 
-    Each chip carries data-name / data-payer / data-risk attributes
-    the inline JS handler reads to toggle ``display: none``. The
-    counter at the right of the filter bar updates live.
+    Clicking a chip:
+      1. Hides all ``.clarion-p360-profile`` divs.
+      2. Shows the profile div whose id matches ``clarion-p360-profile-<pid>``.
+      3. Resets chip styling so only the clicked chip looks selected.
 
-    All JS is inline + scoped via the wrapping element id so it
-    doesn't conflict with anything else on the page; no script
-    elsewhere in the app reads or writes the same handles.
+    Search/filter only toggles chip visibility — it does NOT hide the
+    active profile section, so the content stays readable while you filter.
+    All JS is inline + scoped by the container id.
     """
-    chips = "".join(_chip(p, p.patient_id == selected.patient_id) for p in patients)
     payers = sorted({
         p.insurance.payer for p in patients if p.insurance is not None
     })
@@ -130,70 +147,97 @@ def _picker(
         for payer in payers
     )
     total = len(patients)
-    # Inline JS: read input + select, toggle chip visibility, update
-    # counter. Scoped by container id so it stays self-contained.
-    js = (
+
+    # JS for search/payer filter (only changes chip visibility + counter).
+    filter_js = (
         "(function(){"
-        "var box = document.getElementById('clarion-p360-roster');"
-        "if(!box) return;"
-        "var q = (box.querySelector('.clarion-p360-search') || {}).value;"
-        "var payer = (box.querySelector('.clarion-p360-payer') || {}).value;"
-        "q = (q || '').toLowerCase().trim();"
-        "var chips = box.querySelectorAll('.clarion-p360-chip');"
-        "var shown = 0;"
-        "chips.forEach(function(c){"
-        "  var name = (c.dataset.name || '').toLowerCase();"
-        "  var pid = (c.dataset.pid || '').toLowerCase();"
-        "  var p = c.dataset.payer || '';"
-        "  var matchQ = !q || name.indexOf(q) > -1 || pid.indexOf(q) > -1;"
-        "  var matchPayer = !payer || p === payer;"
-        "  var show = matchQ && matchPayer;"
-        "  c.style.display = show ? '' : 'none';"
-        "  if(show) shown++;"
+        "var box=document.getElementById('clarion-p360-roster');"
+        "if(!box)return;"
+        "var q=(box.querySelector('.clarion-p360-search')||{}).value;"
+        "var payer=(box.querySelector('.clarion-p360-payer')||{}).value;"
+        "q=(q||'').toLowerCase().trim();"
+        "var chips=box.querySelectorAll('.clarion-p360-chip');"
+        "var shown=0;"
+        "chips.forEach(function(ch){"
+        "  var name=(ch.dataset.name||'').toLowerCase();"
+        "  var pid=(ch.dataset.pid||'').toLowerCase();"
+        "  var p=ch.dataset.payer||'';"
+        "  var ok=(!q||name.indexOf(q)>-1||pid.indexOf(q)>-1)&&(!payer||p===payer);"
+        "  ch.style.display=ok?'':'none';"
+        "  if(ok)shown++;"
         "});"
-        "var counter = box.querySelector('.clarion-p360-counter');"
-        f"if(counter) counter.textContent = shown + ' of {total}';"
+        "var counter=box.querySelector('.clarion-p360-counter');"
+        f"if(counter)counter.textContent=shown+' of {total}';"
         "})()"
     )
+
+    # JS for chip click — switches the active profile section.
+    switch_js = (
+        "(function(pid){"
+        # Hide all profile sections.
+        "document.querySelectorAll('.clarion-p360-profile')"
+        ".forEach(function(el){el.style.display='none';});"
+        # Show the clicked patient's section.
+        "var target=document.getElementById('clarion-p360-profile-'+pid);"
+        "if(target)target.style.display='';"
+        # Reset all chip styles to unselected.
+        "document.querySelectorAll('.clarion-p360-chip').forEach(function(ch){"
+        "  ch.style.borderColor='var(--c-border)';"
+        "  ch.style.color='var(--c-text)';"
+        "  ch.style.background='var(--c-bg-panel)';"
+        "  ch.style.fontWeight='var(--fw-medium)';"
+        "  ch.style.cursor='pointer';"
+        "});"
+        # Mark the clicked chip as selected.
+        "var active=document.querySelector"
+        "('.clarion-p360-chip[data-pid=\"'+pid+'\"]');"
+        "if(active){"
+        "  active.style.borderColor='var(--c-accent)';"
+        "  active.style.color='var(--c-accent)';"
+        "  active.style.background='var(--c-bg-subtle)';"
+        "  active.style.fontWeight='var(--fw-semibold)';"
+        "}"
+        "})(this.dataset.pid)"
+    )
+
     return (
         '<div id="clarion-p360-roster" class="clarion-stack" '
         'style="gap: 10px;">'
         # Filter bar.
-        '<div style="display: flex; flex-wrap: wrap; align-items: center; '
-        'gap: 10px;">'
+        '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;">'
         '<input class="clarion-p360-search" type="search" '
         'placeholder="Search by name or patient id..." '
-        f'oninput="{js}" '
-        'style="flex: 1 1 220px; min-width: 200px; padding: 8px 12px; '
-        "border-radius: var(--r-md); border: 1px solid var(--c-border); "
-        "background: var(--c-bg-panel); color: var(--c-text-strong); "
-        'font-size: var(--fs-sm);">'
+        f'oninput="{filter_js}" '
+        'style="flex:1 1 220px;min-width:200px;padding:8px 12px;'
+        "border-radius:var(--r-md);border:1px solid var(--c-border);"
+        "background:var(--c-bg-panel);color:var(--c-text-strong);"
+        'font-size:var(--fs-sm);">'
         '<select class="clarion-p360-payer" '
-        f'onchange="{js}" '
-        'style="padding: 8px 12px; border-radius: var(--r-md); '
-        "border: 1px solid var(--c-border); "
-        "background: var(--c-bg-panel); color: var(--c-text); "
-        'font-size: var(--fs-sm);">'
+        f'onchange="{filter_js}" '
+        'style="padding:8px 12px;border-radius:var(--r-md);'
+        "border:1px solid var(--c-border);"
+        "background:var(--c-bg-panel);color:var(--c-text);"
+        'font-size:var(--fs-sm);">'
         '<option value="">All payers</option>'
         + payer_options
         + "</select>"
         '<span class="clarion-p360-counter" '
-        'style="font-family: var(--font-mono); font-size: var(--fs-xs); '
-        "color: var(--c-text-muted); padding: 4px 10px; "
-        "background: var(--c-bg-subtle); border-radius: var(--r-sm); "
-        'white-space: nowrap;">'
+        'style="font-family:var(--font-mono);font-size:var(--fs-xs);'
+        "color:var(--c-text-muted);padding:4px 10px;"
+        "background:var(--c-bg-subtle);border-radius:var(--r-sm);"
+        'white-space:nowrap;">'
         f"{total} of {total}"
         "</span>"
         "</div>"
         # Chip strip.
-        '<div style="display: flex; flex-wrap: wrap; gap: 8px;">'
-        + chips
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;">'
+        + "".join(_chip(p, p.patient_id == selected.patient_id, switch_js) for p in patients)
         + "</div>"
         "</div>"
     )
 
 
-def _chip(p: PatientProfile, is_selected: bool) -> str:
+def _chip(p: PatientProfile, is_selected: bool, onclick_js: str = "") -> str:
     bg = "var(--c-bg-subtle)" if is_selected else "var(--c-bg-panel)"
     border = "var(--c-accent)" if is_selected else "var(--c-border)"
     color = "var(--c-accent)" if is_selected else "var(--c-text)"
@@ -206,18 +250,21 @@ def _chip(p: PatientProfile, is_selected: bool) -> str:
         if p.trust_score < 0.75
         else "low"
     )
+    onclick_attr = f'onclick="{_esc(onclick_js)}" ' if onclick_js else ""
     return (
-        '<div class="clarion-p360-chip" '
+        f'<div class="clarion-p360-chip" '
         f'data-name="{_esc(p.display_name)}" '
         f'data-pid="{_esc(p.patient_id)}" '
         f'data-payer="{_esc(payer)}" '
         f'data-risk="{risk_band}" '
-        f'style="display: inline-flex; align-items: center; gap: 8px; '
-        f"padding: 6px 12px; border-radius: 999px; "
-        f"background: {bg}; border: 1px solid {border}; "
-        f'color: {color}; font-size: var(--fs-sm); font-weight: {weight};">'
-        f'<span style="font-family: var(--font-mono); font-size: 11px; '
-        f'opacity: 0.7;">{_esc(p.patient_id)}</span>'
+        f'{onclick_attr}'
+        f'style="display:inline-flex;align-items:center;gap:8px;'
+        f"padding:6px 12px;border-radius:999px;cursor:pointer;"
+        f"background:{bg};border:1px solid {border};"
+        f'color:{color};font-size:var(--fs-sm);font-weight:{weight};'
+        f'user-select:none;transition:border-color 0.15s,color 0.15s;">'
+        f'<span style="font-family:var(--font-mono);font-size:11px;'
+        f'opacity:0.7;">{_esc(p.patient_id)}</span>'
         f"<span>{_esc(p.display_name)}</span>"
         "</div>"
     )
