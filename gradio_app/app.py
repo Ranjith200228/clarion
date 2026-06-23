@@ -141,6 +141,13 @@ def build_app() -> gr.Blocks:
             with gr.Tab("Sentinel Ops"):
                 so_html = gr.HTML(_render_sentinel_ops(default_customer))
             with gr.Tab("Agent Flow"):
+                _af_choices = _get_scenario_choices(default_customer)
+                af_scenario_dd = gr.Dropdown(
+                    choices=_af_choices,
+                    value=_af_choices[0] if _af_choices else None,
+                    label="Scenario",
+                    interactive=True,
+                )
                 af_html = gr.HTML(_render_agent_flow(default_customer))
             with gr.Tab("Voice Intelligence"):
                 vi_html = gr.HTML(
@@ -306,6 +313,25 @@ def build_app() -> gr.Blocks:
             outputs=outputs,
         )
 
+        def _update_af_scenario_dd(cid: str) -> object:
+            choices = _get_scenario_choices(cid)
+            return gr.update(choices=choices, value=choices[0] if choices else None)
+
+        # When customer changes, repopulate the scenario picker with
+        # the new tenant's scenario IDs and reset to the first entry.
+        customer_dd.change(
+            fn=_update_af_scenario_dd,
+            inputs=[customer_dd],
+            outputs=[af_scenario_dd],
+        )
+
+        # Scenario picker re-renders Agent Flow without a full page refresh.
+        af_scenario_dd.change(
+            fn=_render_agent_flow,
+            inputs=[customer_dd, af_scenario_dd],
+            outputs=[af_html],
+        )
+
         # demo.load uses the non-generator path and reads its own
         # defaults from the closure - passing inputs= here caused
         # Gradio to send None for customer_id on the first render.
@@ -351,15 +377,20 @@ def _render_sentinel_ops(customer_id: str) -> str:
     return sentinel_ops.build_html(ops)
 
 
-def _render_agent_flow(customer_id: str) -> str:
+def _render_agent_flow(customer_id: str, scenario_id: str | None = None) -> str:
     """Build the Agent Flow HTML for one customer.
 
     Defaults to the first scenario in the tenant's trace report.
     The empty-state fall-back inside the view handles "no trace
     on disk" cleanly.
     """
-    flow = data_sources.build_agent_flow(customer_id)
+    flow = data_sources.build_agent_flow(customer_id, scenario_id=scenario_id)
     return agent_flow.build_html(flow)
+
+
+def _get_scenario_choices(customer_id: str) -> list[str]:
+    """Return all scenario IDs available for this customer."""
+    return data_sources.build_agent_flow(customer_id).available_turns
 
 
 def _render_voice_intel(customer_id: str) -> str:
