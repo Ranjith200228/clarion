@@ -1768,6 +1768,49 @@ def build_cost_slo(
 # ---------- low-level helpers ----------
 
 
+def _parse_captured_details(
+    notes_raw: object,
+) -> tuple[str | None, str | None, str | None, str | None] | None:
+    """Try to read ``notes_raw`` as the JSON payload written by
+    ``book_appointment``.
+
+    Returns ``(patient_name, patient_phone, patient_email, caller_notes)``
+    when the column carries a captured-details JSON object;
+    returns ``None`` for empty values or anything that doesn't
+    parse as a JSON object - in that case the caller treats the
+    raw string as free-form notes.
+
+    The booking tool writes this shape:
+        {"patient_name": ..., "patient_phone": ..., "patient_email": ...,
+         "caller_notes": ... (optional)}
+    Anything missing those keys is treated as free-form so we don't
+    accidentally swallow legacy rows.
+    """
+    if not notes_raw:
+        return None
+    text = str(notes_raw).strip()
+    if not text or not text.startswith("{"):
+        return None
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    name = data.get("patient_name")
+    phone = data.get("patient_phone")
+    email = data.get("patient_email")
+    if not any((name, phone, email)):
+        return None
+    caller_notes = data.get("caller_notes")
+    return (
+        str(name) if name else None,
+        str(phone) if phone else None,
+        str(email) if email else None,
+        str(caller_notes) if caller_notes else None,
+    )
+
+
 def _humanize(customer_id: str | None) -> str:
     """customer_id -> Title Case display name.
 
@@ -1955,6 +1998,14 @@ class PatientTimelineEvent:
     title: str
     detail: str
     severity: Literal["healthy", "info", "warning", "critical"] = "info"
+    # Optional caller-confirmed contact details captured during a
+    # booking conversation. Populated when the source row's notes
+    # column carries a JSON payload from book_appointment; lets the
+    # Patient 360 confirmation card render the actually-collected
+    # name/phone/email instead of the synthesised cosmetic values.
+    captured_name: str | None = None
+    captured_phone: str | None = None
+    captured_email: str | None = None
 
 
 @dataclass(frozen=True)
@@ -2571,8 +2622,26 @@ def _patient_360_from_store(
                     else "warning"
                 )
                 detail = f"{r['appointment_type']} with {provider_name}"
-                if r["notes"]:
+                # The notes column can be either:
+                #   - free-form caller text ("Callback ok at 555-0100.")
+                #   - the JSON payload book_appointment writes:
+                #     {patient_name, patient_phone, patient_email,
+                #      caller_notes?}
+                # We try JSON first; if it parses and looks like a
+                # captured-details payload we surface the contact
+                # fields on the event and use the caller_notes (if any)
+                # as the displayed tail. Otherwise we treat notes as
+                # free-form and append it verbatim, the old behavior.
+                captured = _parse_captured_details(r["notes"])
+                if captured is not None:
+                    cap_name, cap_phone, cap_email, tail = captured
+                    if tail:
+                        detail += f" — {tail}"
+                elif r["notes"]:
                     detail += f" — {r['notes']}"
+                    cap_name = cap_phone = cap_email = None
+                else:
+                    cap_name = cap_phone = cap_email = None
                 timeline_events.append(
                     PatientTimelineEvent(
                         ts=ts,
@@ -2583,6 +2652,9 @@ def _patient_360_from_store(
                         ),
                         detail=detail,
                         severity=severity,
+                        captured_name=cap_name,
+                        captured_phone=cap_phone,
+                        captured_email=cap_email,
                     )
                 )
             for r in tasks:

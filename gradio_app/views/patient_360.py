@@ -456,14 +456,23 @@ def _confirmation_panel(p: PatientProfile, customer_id: str) -> str:
     if not provider_name:
         provider_name = "Care team"
 
+    # Prefer caller-confirmed contact details from the booking
+    # conversation over the synthesised cosmetic values. This is
+    # the payoff for the validated patient_name / phone / email
+    # fields on book_appointment - the values the agent actually
+    # collected flow straight through to the printable confirmation.
+    confirmed_name = upcoming.captured_name or p.display_name
+    confirmed_phone = upcoming.captured_phone or p.phone_display
+    confirmed_email = upcoming.captured_email or p.email
+
     ctx = ConfirmationContext(
         customer_display_name=customer_id.title() + " Practice",
         customer_id=customer_id,
         patient_id=p.patient_id,
-        patient_name=p.display_name,
+        patient_name=confirmed_name,
         patient_dob=p.dob_display,
-        patient_phone=p.phone_display,
-        patient_email=p.email,
+        patient_phone=confirmed_phone,
+        patient_email=confirmed_email,
         patient_address=p.address,
         patient_language=p.preferred_language,
         payer=p.insurance.payer if p.insurance else "Self-pay",
