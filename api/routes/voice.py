@@ -94,10 +94,11 @@ def voice_turn(request: Request, body: VoiceTurnRequest) -> VoiceTurnResponse:
             detail={"detail": str(e), "code": "customer_config_invalid"},
         ) from e
 
-    return orchestrator.turn(
+    result: VoiceTurnResponse = orchestrator.turn(
         agent,
         audio_in,
         customer_id=body.customer_id,
         session_id=body.session_id,
         sample_rate_hz=body.audio_metadata.sample_rate_hz,
     )
+    return result

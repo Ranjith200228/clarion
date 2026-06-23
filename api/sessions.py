@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from clarion.agents.agent import Agent
-from clarion.agents.llm import LLMClient
+from clarion.agents.llm import LLMClient, LLMResponse, LLMUsage, Message, ToolSpec
 from clarion.agents.openai_client import OpenAIClient
 from clarion.config import CustomerConfig, Settings, load_customer
 from clarion.multiagent import MultiAgentRunner
@@ -214,9 +214,12 @@ class DemoModeLLM:
 
     reply: str = DEMO_MODE_REPLY
 
-    def complete(self, messages: list, *, tools: list | None = None):  # type: ignore[no-untyped-def]
-        from clarion.agents.llm import LLMResponse, LLMUsage
-
+    def complete(
+        self,
+        messages: list[Message],
+        *,
+        tools: list[ToolSpec] | None = None,
+    ) -> LLMResponse:
         return LLMResponse(
             content=self.reply,
             tool_calls=(),

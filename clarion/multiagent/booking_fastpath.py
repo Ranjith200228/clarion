@@ -130,7 +130,7 @@ class BookingFastPath:
     @classmethod
     def train_default(
         cls, *, seed: int = 42, n_per_intent: int = 80
-    ) -> "BookingFastPath":
+    ) -> BookingFastPath:
         """Train a fresh classifier from the bundled synthetic templates.
 
         Deterministic when ``seed`` is held constant - the tests rely

@@ -5,13 +5,11 @@ with BookingSpecialist._build_system_prompt.
 from __future__ import annotations
 
 import pytest
-
 from clarion.multiagent.booking_fastpath import (
     BookingFastPath,
     FastPathDecision,
     generate_training_data,
 )
-
 
 # ---------- unit: FastPathDecision ----------
 
@@ -172,8 +170,8 @@ def test_booking_specialist_prompt_contains_hint_when_fastpath_fires() -> None:
     system prompt. We mock the singleton to control confidence precisely."""
     from unittest.mock import MagicMock, patch
 
-    from clarion.multiagent.specialists.booking import BookingSpecialist
     from clarion.config import CustomerConfig
+    from clarion.multiagent.specialists.booking import BookingSpecialist
 
     specialist = BookingSpecialist(
         llm=MagicMock(),
@@ -202,8 +200,8 @@ def test_booking_specialist_prompt_no_hint_for_noise() -> None:
     """When the classifier returns None (not confident), no hint is appended."""
     from unittest.mock import MagicMock, patch
 
-    from clarion.multiagent.specialists.booking import BookingSpecialist
     from clarion.config import CustomerConfig
+    from clarion.multiagent.specialists.booking import BookingSpecialist
 
     specialist = BookingSpecialist(
         llm=MagicMock(),
@@ -227,8 +225,8 @@ def test_booking_specialist_prompt_base_always_present() -> None:
     """The persona and tool-scoping line are always present regardless of hint."""
     from unittest.mock import MagicMock, patch
 
-    from clarion.multiagent.specialists.booking import BookingSpecialist
     from clarion.config import CustomerConfig
+    from clarion.multiagent.specialists.booking import BookingSpecialist
 
     specialist = BookingSpecialist(
         llm=MagicMock(),
