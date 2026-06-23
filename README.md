@@ -1,3 +1,24 @@
+---
+title: Clarion — Configurable Multi-Agent Voice Automation
+emoji: 🛎️
+colorFrom: indigo
+colorTo: gray
+sdk: docker
+app_port: 7860
+suggested_hardware: cpu-basic
+suggested_storage: small
+pinned: false
+license: mit
+short_description: Multi-tenant healthcare scheduling + Sentinel trust engine
+tags:
+  - agents
+  - rag
+  - evaluation
+  - observability
+  - fastapi
+  - gradio
+---
+
 <div align="center">
 
 # Clarion
