@@ -2,50 +2,44 @@
 
 # Clarion
 
-**Configurable multi-agent voice + vision platform for healthcare operations.**
+A configurable multi-agent voice and vision platform for healthcare
+front-desk operations.
 
-Built end-to-end: a multi-tenant control plane that runs a LangGraph
-agent over a typed tool registry, scores every reply with an
-independent trust engine, and surfaces the result through an 11-tab
-operations dashboard with voice in/out and invoice OCR.
-
-[![Tests](https://img.shields.io/badge/tests-580%20passing-22D3EE?style=flat-square)](#testing--quality-gates)
-[![Coverage](https://img.shields.io/badge/ruff-clean-22D3EE?style=flat-square)](#testing--quality-gates)
+[![Tests](https://img.shields.io/badge/tests-580%20passing-22D3EE?style=flat-square)](#testing)
 [![Python](https://img.shields.io/badge/python-3.11%2B-22D3EE?style=flat-square)](pyproject.toml)
+[![Ruff](https://img.shields.io/badge/ruff-clean-22D3EE?style=flat-square)](#testing)
 [![License](https://img.shields.io/badge/license-MIT-22D3EE?style=flat-square)](LICENSE)
 [![HF Space](https://img.shields.io/badge/demo-Hugging%20Face%20Space-FFD21E?style=flat-square)](huggingface/README.md)
 
-[**Live demo**](huggingface/README.md) &middot;
-[**Architecture**](#architecture) &middot;
-[**Quick start**](#quick-start) &middot;
-[**Roadmap**](#roadmap)
+[Live demo](huggingface/README.md) &middot; [How it works](#how-it-works) &middot; [Running it locally](#running-it-locally) &middot; [What I learned](#what-i-learned)
 
 </div>
 
 ---
 
-## What it is, in 60 seconds
+Clarion handles the routine work that absorbs a specialty medical
+practice's phone queue &mdash; booking, eligibility checks,
+rescheduling, payer questions &mdash; and recognises the calls that
+should never reach an automated system. A patient describing sudden
+vision loss, a chest pain, a request for clinical advice. The agent
+talks through a typed tool registry it can't easily talk around, and
+a separate trust engine grades every reply after the fact.
 
-> A real **front-desk operations platform** for specialty medical
-> practices &mdash; not a chatbot demo. The agent books appointments,
-> handles eligibility, recognises emergencies, and escalates to a
-> human at the right moment. Every reply is scored by an independent
-> trust engine before it leaves the system. Onboarding a new vertical
-> is a **one-day YAML change**, not an engineering project.
+Healthcare is the demonstration vertical, not the product. The core
+idea is that vertical-specific behaviour belongs in YAML, not in
+code branches. Onboarding a new tenant &mdash; orthopedics today,
+dermatology or dental tomorrow &mdash; is a one-day config + seed
+job that never touches the agent loop. The repo ships with two
+fully-configured tenants (ophthalmology, orthopedics) and the
+evaluation harness scores both through the same agent code.
 
-| Surface | What it does |
-|---|---|
-| **Mission Control** | Cross-tenant operational health rolled up to a single glance. *"If it matters, it surfaces here."* |
-| **Sentinel Operations** | Per-trace verdicts from the trust engine &mdash; what passed, what was caught, why. |
-| **Agent Flow** | Live trace through the multi-agent LangGraph that handled the conversation. |
-| **Voice Intelligence** | Frustration, emotion, and escalation signals lifted from voice transcripts. |
-| **Patient 360** | Every fact this tenant knows about a patient &mdash; chart, history, payer, care team, appointments. |
-| **Cost & SLO + Invoice OCR** | Per-tenant spend, latency, SLA evidence &mdash; plus a gpt-4o-mini vision uploader that lifts line-items off any vendor invoice. |
-| **Healthcare Ops** | Bookings, no-shows, escalations, revenue recovered &mdash; the domain rollup. |
-| **Live Agent** | Chat with the same LangGraph agent your operators trust in production. |
-| **Voice Agent** | Voice in, voice out &mdash; end-to-end conversation with the agent. |
-| **System Health** | Every subsystem's status, latency, and last heartbeat. |
-| **Configuration** | How this tenant is wired &mdash; identity, tools, escalation thresholds, persona. |
+I built this because I wanted to know what it would actually take to
+ship a customer-facing AI agent I'd trust at the front-desk of a real
+clinic &mdash; not the demo bot, the thing that takes the call. The
+answer is that the model is the easy part. The hard parts are the
+contracts around it: which tools the agent can see, what it's allowed
+to say, how you prove after a bad turn what happened. Most of the
+code in this repo is the contracts.
 
 ---
 
@@ -53,33 +47,19 @@ operations dashboard with voice in/out and invoice OCR.
 
 | | |
 |:--:|:--:|
-| ![Sentinel Operations](docs/screenshots/03-sentinel-ops.png) <br/> **Sentinel Operations** &mdash; composite trust gauge + signal breakdown across the last 100 turns. The trust engine grades every agent reply independently. | ![Agent Flow](docs/screenshots/04-agent-flow.png) <br/> **Agent Flow** &mdash; live trace through the multi-agent LangGraph: router &rarr; booking specialist &rarr; tools &rarr; Sentinel, with the chosen path highlighted. |
-| ![Voice Intelligence](docs/screenshots/05-voice-intelligence.png) <br/> **Voice Intelligence** &mdash; emotion donut + frustration trace + escalation prediction lifted from voice transcripts. | ![Patient 360](docs/screenshots/06-patient-360.png) <br/> **Patient 360** &mdash; roster chips + profile card with engagement / sentiment / trust scores; care team + insurance below. |
-| ![Cost & SLO](docs/screenshots/07-cost-slo.png) <br/> **Cost & SLO** &mdash; per-tenant spend + latency + cost-share donut. The financial control plane for the platform. | ![Invoice OCR](docs/screenshots/07-cost-slo-ocr.png) <br/> **Invoice OCR &middot; gpt-4o-mini vision** &mdash; drop a vendor invoice image, get every dollar amount lifted into a structured row with running total. |
-| ![Live Agent](docs/screenshots/08-live-agent.png) <br/> **Live Agent** &mdash; chat with the production LangGraph agent. Tool calls + cost + escalation score surfaced after every turn. | ![Voice Agent](docs/screenshots/09-voice-agent.png) <br/> **Voice Agent** &mdash; voice in, voice out. Tap record, speak, tap stop, the reply plays back automatically. |
+| ![Sentinel Operations](docs/screenshots/03-sentinel-ops.png) <br/> **Sentinel Operations.** Composite trust gauge + five-signal breakdown across the last 100 turns. The trust engine grades every agent reply independently of the agent. | ![Agent Flow](docs/screenshots/04-agent-flow.png) <br/> **Agent Flow.** Live trace through the LangGraph for a single conversation: router &rarr; booking specialist &rarr; tools &rarr; Sentinel, with the path the agent actually took highlighted. |
+| ![Voice Intelligence](docs/screenshots/05-voice-intelligence.png) <br/> **Voice Intelligence.** Emotion distribution donut + frustration trace + per-turn escalation prediction lifted from voice transcripts. | ![Patient 360](docs/screenshots/06-patient-360.png) <br/> **Patient 360.** Roster chips, profile card, care team, insurance, and a downloadable appointment confirmation generated from the conversation. |
+| ![Cost & SLO](docs/screenshots/07-cost-slo.png) <br/> **Cost & SLO.** Per-tenant spend, latency budgets, cost share by tenant. The financial control plane. | ![Invoice OCR](docs/screenshots/07-cost-slo-ocr.png) <br/> **Invoice OCR.** Upload a vendor invoice image, gpt-4o-mini Vision lifts every dollar amount into a structured row with a running total. |
+| ![Live Agent](docs/screenshots/08-live-agent.png) <br/> **Live Agent.** Chat with the production LangGraph agent. Tool calls, escalation score, and running cost surface after every turn. | ![Voice Agent](docs/screenshots/09-voice-agent.png) <br/> **Voice Agent.** End-to-end voice round-trip. Whisper transcribes, the same agent core decides, OpenAI TTS reads the reply back. |
 
 ---
 
-## Why this matters to a hiring manager
-
-| What you'll see | Why it matters |
-|---|---|
-| **Production engineering**, not a notebook | Multi-stage Dockerfile, structured JSON logging, correlation IDs, retry with backoff, circuit breaker around the LLM, per-tenant rate limits, load-tested p95 SLA, [security review](docs/security_review.md). |
-| **Type-safe, tested, lintable** | Pydantic v2 schemas at every boundary, mypy strict, ruff clean, **580 tests passing**. Boundary regex guards on `patient_id`/`patient_name`/`patient_phone`/`patient_email` &mdash; live-incident-driven, see commit [`a36a72f`](https://github.com/Ranjith200228/clarion/commit/a36a72f). |
-| **Multi-modal AI integration** | OpenAI gpt-4o-mini for chat, Whisper-1 for STT, tts-1 for TTS, gpt-4o-mini vision for invoice OCR. Adapter Protocols so any of the four can be swapped per deployment. |
-| **Multi-agent orchestration** | LangGraph hierarchical graph: classifier router &rarr; 5 specialists (Booking, Eligibility, Info, Cancel, Emergency) &rarr; supervisor that decides finish/route/escalate. Per-specialist tool advertisement shrinks prompt-injection blast radius. |
-| **Independent trust engine** | Sentinel: guardrails (pattern), LLM-as-Judge (post-hoc), escalation scorer (5 weighted signals). Each component has a deliberate failure mode &mdash; guardrails prefer false alarms; the judge defaults to low-confidence on malformed JSON; the scorer is tunable per-customer. |
-| **Schema-locked evaluation** | 100-scenario synthetic corpus per tenant. Locked `EvaluationReport` v1.0.0 contract. The dashboard imports `clarion.schemas` only &mdash; structurally impossible to recompute a metric inside the UI. |
-| **Honest scope** | Synthetic non-PHI data. Healthcare is the *demonstration vertical*; the platform is config-driven. [Security review](docs/security_review.md) names the gaps to HIPAA explicitly. |
-
----
-
-## Architecture
+## How it works
 
 ```
                  ┌─────────────────────────────────────────┐
-                 │     11-tab Gradio dashboard (UI)        │
-                 │  reads only clarion.schemas (typed)     │
+                 │     11-tab Gradio dashboard             │
+                 │  reads only clarion.schemas             │
                  └─────────────┬───────────────────────────┘
                                │
             ┌──────────────────┴──────────────────┐
@@ -88,14 +68,14 @@ operations dashboard with voice in/out and invoice OCR.
  ┌────────────────────┐              ┌────────────────────────┐
  │  FastAPI service   │              │  Evaluation harness    │
  │  /chat /voice/turn │              │  100 scenarios/tenant  │
- │  /cost/extract-…   │              │  locked v1.0.0 schema  │
+ │  /cost/extract-…   │              │  locked schema v1.0.0  │
  └─────────┬──────────┘              └───────────┬────────────┘
            │                                     │
            ▼                                     │
  ┌──────────────────────┐                        │
- │  Sentinel trust      │                        │
- │  guardrails + judge  │                        │
- │  + escalation scorer │◀───────────────────────┘
+ │  Sentinel            │                        │
+ │  guardrails + judge  │◀───────────────────────┘
+ │  + escalation scorer │
  └─────────┬────────────┘
            │
            ▼
@@ -109,302 +89,310 @@ operations dashboard with voice in/out and invoice OCR.
  ┌──────────────────────┐
  │  Foundation          │
  │  YAML config · RAG · │
- │  SQLite store · tools│
+ │  SQLite · tools      │
  └──────────────────────┘
 ```
 
-Per-tenant YAML (`configs/<customer>.yaml`) drives identity, enabled
-tools, escalation thresholds, RAG corpus, and agent persona. Agent
-code never branches on `customer_id`; multi-tenancy is **an allowlist,
-not a code branch**.
+There are three layers worth talking about.
 
-See [docs/architecture.png](docs/architecture.png) for the full
-component diagram; [docs/architecture.mmd](docs/architecture.mmd) for
-the Mermaid source.
+**The dashboard.** A Gradio Blocks app with eleven tabs. Each tab is a
+pure HTML render driven by typed dataclasses from
+`clarion.schemas`. The UI module never imports
+`clarion.evaluation` &mdash; that boundary is enforced by what
+resolves at import time, so a new metric is always a backend change
+and the dashboard can't accidentally recompute one. If you try, the
+module doesn't load.
+
+**The API.** FastAPI mounts three routes: `/chat` for one text turn,
+`/voice/turn` for the speech round trip, and `/cost/extract-invoice`
+for the vision OCR. A session manager keys agents on `(customer_id,
+conversation_id)` so a session can mix voice and text and the
+transcript stays coherent. Every request carries a correlation ID
+that flows through into the structured JSON logs.
+
+**The agent.** A LangGraph state graph. A classifier (`IntentRouter`)
+maps the user's turn to one of five specialists &mdash; Booking,
+Eligibility, Info, Cancel, Emergency. Each specialist sees only the
+subset of tools its YAML allows; the Info specialist literally can't
+see `book_appointment` on its tool list, so a prompt-injection attempt
+has nowhere to reach. After each specialist runs, a supervisor node
+decides finish, route to a different specialist, or escalate to a
+human.
+
+Around all of that sits **Sentinel**, the trust engine. It has three
+independent components, each with a deliberate failure mode:
+
+| Component | Output | Failure mode |
+|---|---|---|
+| Guardrails (emergency / clinical / PHI) | Short-circuits the reply &mdash; the LLM is never called for an emergency turn | Pattern-based; prefers false alarms |
+| LLM-as-Judge (booking + hallucination + policy) | Structured verdict per turn | Defensive parsing &mdash; low-confidence on malformed JSON |
+| Escalation scorer | 0&ndash;1 score from five weighted signals | Tunable thresholds per tenant YAML |
+
+The judge runs *after* the agent has replied, so even if the agent
+got it right, the system grades the answer from outside. That
+separation matters when you're trying to convince yourself a
+production system is actually safe.
+
+---
+
+## Things I cared about while building it
+
+A few notes on decisions that are easy to miss skimming the code.
+
+**The agent shouldn't be able to do anything it wasn't supposed to.**
+The Pydantic `BookAppointmentInput` rejects free-form text in ID
+fields. This started as paranoia and turned into a bug fix the same
+week: the LLM hallucinated a caller's full name into the `patient_id`
+field once, and the row landed in the SQLite store. The Patient 360
+view rendered the corrupted record straight back at me. I dropped
+the row by hand and added the regex `^[A-Za-z][A-Za-z0-9_-]{0,63}$`
+to the schema. The relevant commit
+([`a36a72f`](https://github.com/Ranjith200228/clarion/commit/a36a72f))
+ships tests that lock in the rejection of the original bad input.
+
+**The same patient-detail validation runs three layers deep.** The
+booking specialist's system prompt explicitly asks the agent to read
+the caller's name, phone, and email back to them before calling the
+tool. The tool schema validates the same three fields independently
+with regex patterns. The store persists them into the appointment's
+`notes` column as JSON, so the Patient 360 confirmation card renders
+the values the caller actually confirmed &mdash; not a name
+synthesised from a hash of the `patient_id`. Three layers because
+the prompt is a soft hint and the schema is a hard wall, but a real
+contract wants both.
+
+**Tools are advertised per specialist.** The Booking specialist sees
+`search_slots`, `book_appointment`, `cancel_appointment`,
+`check_eligibility`, `create_pms_task`. The Info specialist sees only
+`create_pms_task`. The orthopedics tenant doesn't enable
+`cancel_appointment` at all &mdash; its YAML omits it, the registry
+honours the allowlist strictly, and that customer's agent has never
+seen a cancel tool on any call. Multi-tenancy is an allowlist, not
+a code branch. Every time I caught myself reaching for `if customer_id
+== "..."` the answer was always to add a YAML field instead.
+
+**The evaluation report contract is locked.** Adding a new metric is
+additive only &mdash; new optional field on `EvaluationReport.metrics`,
+schema version stays `1.0.0`, the locked-schema regression test
+passes. The dashboard reads from this contract; it never recomputes
+anything. That has saved hours of debugging when a metric definition
+changes and three different pieces of code disagree about which
+definition is right.
+
+**Vision OCR was a one-day add-on, not a rewrite.** The Cost & SLO
+tab has an invoice uploader that posts to `/cost/extract-invoice`,
+which calls gpt-4o-mini in JSON mode with a strict extraction prompt.
+The response is parsed defensively (strip code fences, coerce number
+strings, drop malformed line items) into the same kind of typed
+dataclass the rest of the app uses. Total surface: one Python module,
+one FastAPI route, one Gradio component, one CSS block. The module
+boundary that made this so cheap to add is the same boundary that
+keeps Sentinel decoupled from the agent.
+
+---
+
+## Running it locally
+
+```bash
+git clone https://github.com/Ranjith200228/clarion.git
+cd clarion
+poetry install
+export OPENAI_API_KEY=sk-...
+
+# Populate evaluation artifacts (synthetic; run once)
+poetry run python -m clarion.eval --customer all
+
+# In one terminal: the FastAPI backend
+poetry run python -m uvicorn api.app:app --host 0.0.0.0 --port 8000
+
+# In another: the dashboard
+poetry run python -m gradio_app
+
+# Open http://localhost:7860
+```
+
+The dashboard works without the API for everything that reads
+artifacts off disk &mdash; only Live Agent, Voice Agent, and Invoice
+OCR need the backend running.
+
+For Docker:
+
+```bash
+docker compose up    # API + dashboard side-by-side
+```
+
+The multi-stage Dockerfile pre-bakes the FAISS indices in the builder
+stage, so a fresh container is serving requests in under two seconds.
 
 ---
 
 ## Tech stack
 
-| Layer | Tools |
+| Layer | Notes |
 |---|---|
-| **Language** | Python 3.11+ |
-| **Types & validation** | Pydantic v2, mypy `--strict`, ruff |
-| **LLM** | OpenAI `gpt-4o-mini` (chat + vision), `whisper-1` (STT), `tts-1` (TTS), `text-embedding-3-small` (RAG) |
-| **Multi-agent** | LangGraph (StateGraph) |
-| **API** | FastAPI, Pydantic models, ASGI |
-| **UI** | Gradio 4.44 (Blocks API + custom CSS) |
-| **RAG** | FAISS index + scikit-learn TF-IDF fallback |
-| **ML** | XGBoost (no-show classifier with held-out ROC-AUC + top-decile lift) |
-| **Data store** | SQLite per-tenant (`structured.sqlite`) for slots, appointments, eligibility, PMS tasks |
-| **Observability** | Structured JSON logs, correlation IDs, span traces (JSONL), audit log per tenant |
-| **Resilience** | Retry-with-backoff, circuit breaker around LLM, per-(customer, IP) token-bucket rate limit |
-| **Deploy** | Multi-stage Docker, Hugging Face Spaces (primary), Cloud Run / Render / Fly.io manifests, Poetry |
-| **Test & CI** | 580 pytest tests, GitHub Actions matrix on 3.11 + 3.12, pre-commit hooks, security review (STRIDE) |
+| Language | Python 3.11+, mostly statically typed, mypy strict on the agent core |
+| Validation | Pydantic v2 at every boundary; `extra="forbid"` on every tool schema so the model can't smuggle unknown fields |
+| LLM | OpenAI &mdash; `gpt-4o-mini` for chat and vision, `whisper-1` for STT, `tts-1` for TTS, `text-embedding-3-small` for RAG |
+| Orchestration | LangGraph (StateGraph) for the multi-agent backend; single-`Agent` ReAct loop also available, toggled per tenant in YAML |
+| Trust engine | Hand-rolled. Guardrails are regex + keyword, judge is LLM-backed with a strict JSON contract, escalation scorer fuses five signals with tunable weights |
+| HTTP | FastAPI with custom middleware for correlation IDs and per-(tenant, IP) token-bucket rate limits |
+| UI | Gradio 4.44 Blocks + ~1,300 lines of design-token CSS. Eleven tabs, all driven from typed wire models |
+| Resilience | Retry with full-jitter backoff, circuit breaker around the LLM client (5 failures &rarr; 30 s open) |
+| Storage | Per-tenant SQLite (`structured.sqlite`) for slots/appointments/eligibility/PMS tasks; FAISS for vector RAG |
+| ML side | XGBoost no-show classifier with held-out ROC-AUC and top-decile lift folded into the locked report contract |
+| Tests | 580 pytest; CI matrix on 3.11 and 3.12; ruff + mypy gates |
+| Deploy | Multi-stage Docker, primary target is a Hugging Face Space; manifests also for Cloud Run, Render, Fly.io |
 
 ---
 
-## Quick start
-
-```bash
-# 1. Clone + install
-git clone https://github.com/Ranjith200228/clarion.git
-cd clarion
-poetry install
-
-# 2. Set the LLM key
-export OPENAI_API_KEY=sk-...
-
-# 3. Populate evaluation data (synthetic, one-time)
-poetry run python -m clarion.eval --customer all
-
-# 4. Run the FastAPI backend (terminal 1)
-poetry run python -m uvicorn api.app:app --host 0.0.0.0 --port 8000
-
-# 5. Run the Gradio dashboard (terminal 2)
-poetry run python -m gradio_app
-
-# 6. Open http://localhost:7860
-```
-
-The dashboard works without the FastAPI backend &mdash; only the
-**Live Agent**, **Voice Agent**, and **Invoice OCR** tabs need
-it. Everything else reads JSON + SQLite artifacts from disk.
-
----
-
-## Key features
-
-### 1. Configurable multi-tenancy
-
-Customer-specific behavior is a YAML field, not a code branch:
-
-```yaml
-# configs/ophthalmology.yaml
-customer_id: ophthalmology
-display_name: North Shore Eye Associates
-enabled_tools:
-  - search_slots
-  - book_appointment
-  - cancel_appointment       # orthopedics drops this; cancels route to a PMS task
-  - check_eligibility
-  - create_pms_task
-escalation:
-  low_confidence: 0.60
-  frustration: 0.70
-  max_clarifications: 3
-use_multiagent: true         # opt into LangGraph backend
-```
-
-Adding a new vertical is six steps (one working day), none of which
-touch `clarion/agents/`. See [docs/developer_guide.md](docs/developer_guide.md).
-
-### 2. Schema-validated agent tools
-
-Every LLM tool call is Pydantic-validated **before** it touches the
-store. Real incident from the audit log:
-
-> The LLM hallucinated a patient's full name into the `patient_id`
-> field on `book_appointment`. A row landed in the structured store
-> with `patient_id = "Ranjit Kumar Madhirala"`, corrupting downstream
-> Patient 360 renders.
-
-The fix &mdash; commit [`a36a72f`](https://github.com/Ranjith200228/clarion/commit/a36a72f),
-visible in [`clarion/schemas/tools.py`](clarion/schemas/tools.py)
-&mdash; adds three regex guards:
-
-```python
-patient_id    : Field(pattern=r"^[A-Za-z][A-Za-z0-9_\-]{0,63}$")
-patient_name  : Field(pattern=r"^[A-Za-zÀ-ÿ'\-]{2,}(\s+[A-Za-zÀ-ÿ'\-]{1,}){1,4}$")
-patient_phone : Field(pattern=r"^[\d\s\-\(\)\+\.]{7,25}$")
-patient_email : Field(pattern=r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
-```
-
-Combined with the booking-specialist persona prompt ("read each
-field back to the caller before booking"), the agent now collects
-real contact details at every touchpoint. The Patient 360
-confirmation card surfaces the actually-collected values, not
-synthesised cosmetics.
-
-### 3. Sentinel trust engine
-
-Three independent components, each scored per turn:
-
-| Component | Output | Failure mode |
-|---|---|---|
-| **Guardrails** (emergency / clinical / PHI) | Short-circuit reply &mdash; LLM is never called | Pattern-based: prefer false alarms |
-| **LLM-as-Judge** (booking + hallucination + policy) | Structured verdict per turn | Defensive parsing: low-confidence on malformed JSON |
-| **Escalation scorer** (5 weighted signals) | 0&ndash;1 score per turn | Tunable thresholds per customer YAML |
-
-Independence is the point: even if the agent's reply was correct,
-the trust engine grades it from outside. The Sentinel Operations
-tab visualises every verdict.
-
-### 4. Invoice OCR via gpt-4o-mini Vision
-
-End-to-end multimodal pipeline shipped in [`f336fa2`](https://github.com/Ranjith200228/clarion/commit/f336fa2):
-
-```
-Gradio upload  ─▶  FastAPI /cost/extract-invoice  ─▶  OpenAI Vision
-  (image bytes)     (multipart + 5MB cap)             (gpt-4o-mini)
-       ◀─────────────────────◀───────────────────────────◀
-   Styled card     Structured JSON: line items, total, currency
-```
-
-JSON-mode response, defensive parsing (strips code fences, coerces
-number-as-string), per-row rendering with a highlighted total + raw
-text drawer for verification.
-
-### 5. Engagement layer that signals product taste
-
-Five micro-features that make the dashboard feel alive without
-adding meaningful runtime cost:
-
-- **Time-of-day greeting**: *"Good evening, operator. Ophthalmology &middot; 3 items need your eyes"*
-- **Today's Standout card** that names the one thing that matters right now
-- **Per-tenant accent identity** (ophthalmology = cyan, orthopedics = amber) that ripples through KPI edges, badges, focus rings
-- **KPI value entrance animation** &mdash; values scale+fade in on every customer switch
-- **Logo easter egg** &mdash; click the hex mark for a 700ms spin with a cyan glow burst
-
-All five honor `prefers-reduced-motion` and are pure-CSS where possible.
-
----
-
-## Repository structure
+## Repository layout
 
 ```
 clarion/
-  agents/             Agent core: ReAct loop + tool dispatch + OpenAI client
-  multiagent/         LangGraph backend: router + specialists + supervisor
-  sentinel/           Trust engine: guardrails, judge, escalation, PHI
-  schemas/            Pydantic wire models (the lock between layers)
-  modules/            Opt-in post-launch modules
-    invoice_ocr.py        gpt-4o-mini vision (shipped)
-    no_show_prediction/   XGBoost no-show classifier (shipped)
-    pms_writeback/        Conversation -> summary.json + task.json (shipped)
-    voice/                STT + TTS + VoiceOrchestrator (shipped)
-  pipelines/          RAG + structured store
+  agents/             Single-Agent ReAct loop + OpenAI client wrapper
+  multiagent/         LangGraph backend: router, specialists, supervisor
+  sentinel/           Trust engine — guardrails, judge, escalation, PHI
+  schemas/            Pydantic wire models. The contract between layers.
+  modules/            Opt-in post-launch capabilities
+    invoice_ocr.py        gpt-4o-mini Vision invoice extraction
+    no_show_prediction/   XGBoost classifier, persisted to joblib
+    pms_writeback/        Conversation → summary.json + task.json
+    voice/                Whisper + OpenAI TTS round trip
+  pipelines/          Structured store (SQLite) + RAG retriever
   resilience/         Retry, circuit breaker, rate limit
-  evaluation/         100-scenario harness + locked report writer
-  observability/      Structured logging + correlation IDs + spans
-  config/             Settings + per-customer YAML loader
+  evaluation/         100-scenario harness, locked report writer
+  observability/      Structured JSON logs, correlation IDs, spans
+  config/             Settings + per-tenant YAML loader
 
 api/
-  app.py              FastAPI factory (modular routers)
-  routes/             /chat /voice/turn /cost/extract-invoice /health /evaluate
+  app.py              FastAPI factory
+  routes/             /chat /voice/turn /cost/extract-invoice /health
   middleware/         Correlation IDs + rate limiter
-  sessions.py         Per-(customer, conversation) session manager
+  sessions.py         Per-(tenant, conversation) session manager
 
 gradio_app/
-  app.py              11-tab Blocks shell, customer switcher, identity layer
-  views/              One file per tab: pure HTML renderers, never any I/O
-  components.py       Shared visual primitives (kpi_tile, donut, page_intro, …)
-  data_sources.py     Typed roll-ups consumed by views
+  app.py              11-tab Blocks shell + customer switcher
+  views/              One file per tab, pure HTML render functions
+  components.py       Shared visual primitives (KPI tile, donut, …)
+  data_sources.py     Typed roll-ups consumed by the views
   tab_*.py            Stateful tabs (live agent, voice agent, cost OCR)
-  theme.py + style.css   ~1300 lines of design tokens + primitives
+  theme.py / style.css   Design tokens and primitive CSS
 
-configs/              Per-customer YAML (ophthalmology, orthopedics)
-data/                 Per-customer artifacts (report + trace JSONs, SQLite)
+configs/              Per-tenant YAML
+data/                 Per-tenant artifacts (gitignored — re-generated by harness)
 tests/                580 pytest tests (unit + integration + e2e)
-docs/                 Architecture diagrams, dev + deploy guides, security review
+docs/                 Discovery doc, dev/deploy guides, security review
 loadtest/             Locust profile + in-process p95 SLA test
 huggingface/          HF Spaces deployment manifest
 ```
 
 ---
 
-## Testing & quality gates
+## Testing
 
 ```bash
-poetry run pytest                    # 580 tests, ~30s
+poetry run pytest                              # the full 580
 poetry run ruff check clarion gradio_app api tests
 poetry run mypy --strict clarion api
-poetry run pytest -m loadtest        # opt-in p95 SLA budget
+poetry run pytest -m loadtest                  # opt-in p95 SLA budget
 ```
 
-CI matrix on Python 3.11 + 3.12 (GitHub Actions). Every commit:
-- Pytest (must be green)
-- Ruff lint (no autofix at gate)
-- Mypy strict on core
-- Schema regression test on the locked `EvaluationReport` v1.0.0
-
-The boundary regex guards mentioned above ([commit `a36a72f`](https://github.com/Ranjith200228/clarion/commit/a36a72f))
-ship with 6 new unit tests that lock in the rejection of "single-word
-name", "phone with words", "n/a email", plus the acceptance of
-international names + E.164 formats.
-
----
-
-## Deployment
-
-| Target | Manifest | Notes |
-|---|---|---|
-| **Hugging Face Space** (primary) | [`huggingface/README.md`](huggingface/README.md) | Docker SDK, `app_port: 7860` |
-| GCP Cloud Run | [`deploy/cloudrun.yaml`](deploy/cloudrun.yaml) | Knative + Secret Manager |
-| Render | [`deploy/render.yaml`](deploy/render.yaml) | Blueprint, `sync: false` secret |
-| Fly.io | [`deploy/fly.toml`](deploy/fly.toml) | `fly secrets set OPENAI_API_KEY=...` |
-| Local | `docker compose up` | API + Gradio side-by-side |
-
-Multi-stage Dockerfile pre-bakes FAISS indices in the builder stage
-so container start is <2 s. Non-root user (UID 1000), HEALTHCHECK on
-`/health`, tini for signal propagation. See
-[docs/deployment_guide.md](docs/deployment_guide.md).
+The 580 tests include:
+- The e2e ophthalmology and orthopedics booking flows, driven by a
+  scripted `FakeLLM` so CI never needs a real key.
+- The boundary regex guards on `BookAppointmentInput` &mdash; six
+  cases covering single-word names, "ask me later" phones, "n/a"
+  emails, and the international/E.164 formats they should still
+  accept.
+- A schema-regression test on the locked `EvaluationReport` v1.0.0
+  contract. Anything additive is fine; anything that would change
+  an existing field's name or type fails the gate.
+- An opt-in `loadtest` marker that runs an in-process p95 latency
+  budget against a `FakeLLM` so the numbers reflect framework +
+  middleware + agent overhead. For real-OpenAI numbers there's also
+  a Locust profile in `loadtest/locustfile.py` you can run against
+  a deployed instance.
 
 ---
 
-## Results
+## What I learned
 
-100 scenarios per customer, scripted-mode evaluation:
+A few things that surprised me while building this, in case any of it
+is useful to someone making the same calls.
 
-| Metric | Ophthalmology | Orthopedics |
-|---|---|---|
-| Pass rate | 100% | 100% |
-| Containment rate | 0.74 | 0.74 |
-| Booking accuracy | 1.00 (38/38) | 1.00 (38/38) |
-| Escalation precision | 0.62 | 0.62 |
-| Escalation recall | 1.00 | 1.00 |
-| Safety catch rate (emergencies) | 1.00 | 1.00 |
+The hardest part was never the model. It was deciding what the
+agent's tools *aren't* allowed to do. Pydantic regex guards on ID
+fields prevented exactly one production bug (the patient-name-as-id
+incident) and probably several I never noticed. The cost was a few
+lines of code; the value was the dashboard not silently rendering
+garbage.
 
-100% recall on emergencies is the spec-mandated floor; we hit it.
-Full reports at [`reports/v1.0.0/`](reports/v1.0.0/).
+LangGraph specialists are mostly a vehicle for tool scoping. The
+classifier hop adds latency I'd rather not have. What I do want is
+that the Info specialist literally can't book an appointment because
+it's never been advertised the tool. That's a property of the graph
+structure, not the prompt, which means a jailbreak attempt has no
+target to aim at.
+
+The independent judge has been worth its cost. It's caught two
+real-feeling bugs during eval: a hallucinated specialty
+("retinal-vascular consult") on a tenant that doesn't offer it, and
+a booking where the agent confirmed a time that conflicted with the
+slot it had actually reserved. Both bugs that would have been
+plausible to a human reviewer. The judge flagged them because it
+runs from outside.
+
+Pre-aggregated UI feeds in the locked report mean the dashboard tabs
+are mostly 30-line render functions. Every time I added a new view
+my first instinct was "let me just call the metric function". Every
+time I resisted, the view ended up smaller and the schema ended up
+clearer. The instinct is wrong &mdash; the discipline is right.
 
 ---
 
-## Roadmap
+## Status
 
-| Module | Status |
+Shipped, in this order:
+
+- v1.0.0 (tagged 2026-06-12) &mdash; single-Agent ReAct backend,
+  Sentinel trust engine, locked evaluation schema, FastAPI service,
+  production hardening, 100-scenario reports for both tenants.
+- LangGraph multi-agent backend, opt-in per tenant via `use_multiagent: true`.
+- PMS writeback module &mdash; conversation to `summary.json` +
+  `task.json` with PHI redaction at the writer.
+- No-show prediction (XGBoost) folded into the locked report.
+- Voice layer &mdash; Whisper STT + OpenAI TTS round trip.
+- Gradio dashboard rewrite to the eleven-tab shell.
+- Invoice OCR via gpt-4o-mini Vision.
+- Engagement layer (time-of-day greeting, per-tenant accent identity,
+  KPI value entrance animation).
+- Boundary regex guards on every tool ID field after the patient-id
+  hallucination incident.
+- Caller-confirmed contact details (name, phone, email) flow from
+  the conversation through to the printable confirmation.
+
+What's next:
+- Live-mode evaluation with real OpenAI numbers in the report.
+- Investigation: a fine-tuned classifier behind `BookingSpecialist` to
+  cut prompt size and latency.
+- Push from the Hugging Face Space to a custom domain.
+
+---
+
+## Reading deeper
+
+| Document | What's in it |
 |---|---|
-| M1 &mdash; PMS Writeback (conversation &rarr; `summary.json` + `task.json`) | shipped |
-| M3 &mdash; No-Show Prediction (XGBoost, held-out ROC-AUC + top-decile lift) | shipped |
-| M5 &mdash; Voice Layer (faster-whisper STT + OpenAI TTS) | shipped |
-| LangGraph multi-agent backend (router &rarr; specialists &rarr; supervisor) | shipped |
-| Phase 18 hardening (retries, breaker, rate limit, JSON logs, load test) | shipped |
-| v1.0.0 release with locked schema | [released 2026-06-12](https://github.com/Ranjith200228/clarion/releases/tag/v1.0.0) |
-| Cost & SLO invoice OCR (gpt-4o-mini vision) | shipped |
-| Engagement layer + per-tab page intros + boundary validators | shipped |
-| Patient detail capture in conversation &rarr; confirmation card | shipped |
-| **Next**: live-mode evaluation report with real OpenAI numbers | in progress |
-| **Next**: fine-tuned classifier behind `BookingSpecialist` | planned |
+| [docs/discovery.md](docs/discovery.md) | The pre-build artifact: customer problem, requirements, how the architecture maps onto them |
+| [docs/developer_guide.md](docs/developer_guide.md) | Local setup, the six steps for onboarding a new tenant, internal layout |
+| [docs/deployment_guide.md](docs/deployment_guide.md) | Container build, secret management, the four hosting targets |
+| [docs/security_review.md](docs/security_review.md) | STRIDE-shaped audit. The gaps section is the honest part |
+| [reports/v1.0.0/](reports/v1.0.0/) | Locked-schema evaluation reports for both tenants |
+| [CHANGELOG.md](CHANGELOG.md) | What shipped, with pointers into the code |
 
 ---
-
-## Read deeper
-
-| Document | What's inside |
-|---|---|
-| [`docs/discovery.md`](docs/discovery.md) | The FDE artifact: customer problem &rarr; requirements &rarr; how Clarion's three layers map onto them. |
-| [`docs/developer_guide.md`](docs/developer_guide.md) | Local setup, six-step new-customer onboarding, internal layout. |
-| [`docs/deployment_guide.md`](docs/deployment_guide.md) | Container build, secret management, the four hosting targets in detail. |
-| [`docs/security_review.md`](docs/security_review.md) | STRIDE-shaped audit. The gaps list is the load-bearing section. |
-| [`reports/v1.0.0/`](reports/v1.0.0/) | Locked-schema evaluation reports for both shipped customers. |
-| [`CHANGELOG.md`](CHANGELOG.md) | What shipped, with pointers into the code. |
-
----
-
-## License & contact
 
 [MIT](LICENSE) &copy; 2026 Ranjith Maddirala.
 
-Built end-to-end as a portfolio piece. Reach out at
-`ranjithmaddirala24@gmail.com` &mdash; happy to walk through any
-layer in detail.
+Happy to walk through any layer of this in detail &mdash;
+`ranjithmaddirala24@gmail.com`.
